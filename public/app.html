@@ -1,0 +1,2310 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SRP">
+<meta name="theme-color" content="#0a0e14">
+<title>SRP — Remontée Terrain</title>
+<link rel="manifest" id="pwa-manifest">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════
+   DESIGN SYSTEM — Industriel Précision
+   Palette : fond noir charbon, accents couleur
+   Typographie : IBM Plex — technique, lisible
+══════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  /* Fond */
+  --bg:#0a0e14; --bg2:#111822; --bg3:#18222f; --bg4:#1f2d3d;
+  --border:#1e3048; --border2:#2a4060;
+  /* Texte */
+  --txt:#ddeeff; --txt2:#7aa0c0; --muted:#3a5878;
+  /* Accents rôles */
+  --op:#00c8a0;    --op-bg:rgba(0,200,160,.08);    /* Opérateur — teal */
+  --n1:#f0a030;    --n1-bg:rgba(240,160,48,.08);   /* Niveau 1 — ambre */
+  --n3:#c060ff;    --n3-bg:rgba(192,96,255,.08);   /* Niveau 3 — violet */
+  /* Urgences */
+  --crit:#ff3355;  --crit-bg:rgba(255,51,85,.08);
+  --urg:#f5a623;   --urg-bg:rgba(245,166,35,.08);
+  --norm:#00c8a0;  --norm-bg:rgba(0,200,160,.08);
+  /* UI */
+  --radius:10px; --radius-sm:7px;
+  --shadow:0 4px 24px rgba(0,0,0,.5);
+  --font:'IBM Plex Sans',sans-serif;
+  --mono:'IBM Plex Mono',monospace;
+  /* Safe areas */
+  --sat:env(safe-area-inset-top,0px);
+  --sab:env(safe-area-inset-bottom,0px);
+}
+
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--font);font-size:15px;overflow-x:hidden}
+button{font-family:var(--font);cursor:pointer;border:none;outline:none;-webkit-appearance:none}
+input,textarea,select{font-family:var(--font);outline:none;-webkit-appearance:none}
+textarea{resize:none}
+
+/* ── LAYOUT ── */
+#app{min-height:100vh;min-height:-webkit-fill-available;display:flex;flex-direction:column}
+
+/* ── SPLASH / ROLE PICKER ── */
+#splash{
+  position:fixed;inset:0;background:var(--bg);z-index:1000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;
+}
+.splash-logo{
+  width:64px;height:64px;background:var(--op);border-radius:16px;
+  display:flex;align-items:center;justify-content:center;font-size:2em;margin-bottom:24px;
+  box-shadow:0 0 40px rgba(0,200,160,.3);animation:logoIn .6s ease;
+}
+@keyframes logoIn{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+.splash-title{font-family:var(--mono);font-size:1.4em;font-weight:600;color:var(--txt);margin-bottom:4px}
+.splash-sub{font-size:0.82em;color:var(--muted);margin-bottom:40px;letter-spacing:.05em}
+.role-cards{width:100%;max-width:380px;display:flex;flex-direction:column;gap:12px}
+.role-card{
+  padding:18px 20px;border-radius:var(--radius);border:1.5px solid var(--border2);
+  background:var(--bg2);cursor:pointer;transition:all .2s;
+  display:flex;align-items:center;gap:16px;
+}
+.role-card:hover,.role-card:active{transform:translateX(4px);background:var(--bg3)}
+.role-card.op{border-color:var(--op);box-shadow:0 0 20px rgba(0,200,160,.1)}
+.role-card.n1{border-color:var(--n1);box-shadow:0 0 20px rgba(240,160,48,.1)}
+.role-card.n3{border-color:var(--n3);box-shadow:0 0 20px rgba(192,96,255,.1)}
+.role-icon{font-size:1.8em;width:40px;text-align:center;flex-shrink:0}
+.role-info{}
+.role-name{font-weight:700;font-size:1em}
+.role-desc{font-size:0.78em;color:var(--txt2);margin-top:2px}
+.role-card.op .role-name{color:var(--op)}
+.role-card.n1 .role-name{color:var(--n1)}
+.role-card.n3 .role-name{color:var(--n3)}
+
+/* Saisie nom */
+.name-step{display:none;flex-direction:column;gap:16px;width:100%;max-width:380px}
+.name-step.visible{display:flex}
+.name-input-wrap{position:relative}
+.name-label{font-size:0.78em;font-weight:600;color:var(--txt2);margin-bottom:8px;display:block;letter-spacing:.05em}
+.name-input{
+  display:block;width:100%;padding:14px 16px;border-radius:var(--radius);
+  background:var(--bg3);border:1.5px solid var(--border2);color:var(--txt);
+  font-size:1em;font-family:var(--mono);transition:border-color .2s;
+}
+.name-input:focus{border-color:var(--op)}
+.btn-confirm{
+  padding:15px;border-radius:var(--radius);font-size:1em;font-weight:700;
+  text-align:center;cursor:pointer;border:none;transition:all .15s;
+  font-family:var(--mono);letter-spacing:.05em;
+}
+.btn-back{
+  background:transparent;color:var(--txt2);font-size:0.85em;
+  padding:8px;border:none;cursor:pointer;font-family:var(--font);
+  display:flex;align-items:center;gap:6px;
+}
+
+/* ── TOPBAR ── */
+.topbar{
+  padding:calc(var(--sat) + 12px) 16px 12px;
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;
+}
+.tb-logo{
+  width:32px;height:32px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;font-size:1em;flex-shrink:0;
+}
+.tb-logo.op{background:var(--op-bg);color:var(--op)}
+.tb-logo.n1{background:var(--n1-bg);color:var(--n1)}
+.tb-logo.n3{background:var(--n3-bg);color:var(--n3)}
+.tb-title{font-family:var(--mono);font-size:0.92em;font-weight:600;flex:1}
+.tb-name{font-size:0.75em;color:var(--txt2)}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.tb-badge{
+  background:var(--crit);color:white;border-radius:10px;
+  font-size:0.7em;font-weight:700;padding:2px 7px;min-width:20px;text-align:center;
+  display:none;animation:badgePop .3s ease;
+}
+@keyframes badgePop{from{transform:scale(.5)}to{transform:scale(1)}}
+.conn-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--muted);
+  transition:background .3s;flex-shrink:0;
+}
+.conn-dot.online{background:var(--op);box-shadow:0 0 6px var(--op)}
+.conn-dot.offline{background:var(--crit)}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{
+  position:sticky;bottom:0;
+  padding-bottom:calc(var(--sab) + 0px);
+  background:var(--bg2);border-top:1px solid var(--border);
+  display:flex;z-index:50;
+}
+.nav-item{
+  flex:1;padding:10px 0 8px;text-align:center;cursor:pointer;
+  color:var(--muted);font-size:0.68em;font-weight:600;
+  letter-spacing:.04em;transition:color .15s;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+}
+.nav-icon{font-size:1.3em;line-height:1}
+.nav-item.active.op{color:var(--op)}
+.nav-item.active.n1{color:var(--n1)}
+.nav-item.active.n3{color:var(--n3)}
+.nav-dot{
+  width:5px;height:5px;border-radius:50%;background:var(--crit);
+  position:absolute;top:8px;right:calc(50% - 14px);display:none;
+}
+
+/* ── CONTENT ── */
+.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.screen{display:none;padding:16px}
+.screen.active{display:block}
+
+/* ── COMPONENTS ── */
+.section-label{
+  font-family:var(--mono);font-size:0.68em;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.1em;margin:20px 0 10px;
+}
+.section-label:first-child{margin-top:0}
+
+.card{
+  background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border);
+  margin-bottom:10px;overflow:hidden;
+}
+.card-header{
+  padding:12px 14px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--border);
+}
+.card-title{font-size:0.82em;font-weight:700;flex:1}
+.card-body{padding:14px}
+
+/* Stat grid */
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.stat-box{
+  background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border);
+  padding:12px;text-align:center;
+}
+.stat-val{font-family:var(--mono);font-size:1.8em;font-weight:600;line-height:1}
+.stat-val.op{color:var(--op)}
+.stat-val.crit{color:var(--crit)}
+.stat-val.urg{color:var(--urg)}
+.stat-val.n3{color:var(--n3)}
+.stat-lbl{font-size:0.68em;color:var(--muted);margin-top:4px;line-height:1.3}
+
+/* Remontée list item */
+.r-item{
+  background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border);
+  margin-bottom:8px;cursor:pointer;overflow:hidden;transition:border-color .15s;
+  display:flex;
+}
+.r-item:active{background:var(--bg3)}
+.r-accent{width:4px;flex-shrink:0}
+.r-accent.crit{background:var(--crit)}
+.r-accent.urgent{background:var(--urg)}
+.r-accent.normal{background:var(--norm)}
+.r-body{flex:1;padding:12px;min-width:0}
+.r-desc{font-size:0.9em;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r-meta{font-size:0.72em;color:var(--txt2);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap}
+.r-right{padding:12px 12px 12px 0;display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:0.7em;font-weight:700;white-space:nowrap;font-family:var(--mono)}
+.badge.crit{background:var(--crit-bg);color:var(--crit)}
+.badge.urgent{background:var(--urg-bg);color:var(--urg)}
+.badge.normal{background:var(--norm-bg);color:var(--norm)}
+.badge.nouveau{background:rgba(64,144,255,.1);color:#4090ff}
+.badge.encours{background:rgba(240,160,48,.1);color:var(--n1)}
+.badge.escalade{background:var(--crit-bg);color:var(--crit)}
+.badge.check{background:rgba(192,96,255,.1);color:var(--n3)}
+.badge.resolu{background:var(--norm-bg);color:var(--op)}
+.badge.cloture{background:rgba(74,112,144,.1);color:var(--muted)}
+.badge.new-notif{background:var(--crit);color:white;animation:badgePop .3s}
+
+/* Buttons */
+.btn{
+  display:block;width:100%;padding:14px;border-radius:var(--radius);
+  font-size:0.95em;font-weight:700;text-align:center;cursor:pointer;
+  transition:all .15s;border:none;font-family:var(--mono);letter-spacing:.04em;
+}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.4;pointer-events:none}
+.btn-op{background:var(--op);color:#0a0e14}
+.btn-n1{background:var(--n1);color:#0a0e14}
+.btn-n3{background:var(--n3);color:#0a0e14}
+.btn-ghost{background:transparent;color:var(--txt2);border:1px solid var(--border2)}
+.btn-danger{background:var(--crit-bg);color:var(--crit);border:1px solid rgba(255,51,85,.2)}
+.btn-row{display:flex;gap:10px;margin-top:14px}
+.btn-row .btn{flex:1}
+.btn-sm{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 14px;border-radius:var(--radius-sm);
+  font-size:0.78em;font-weight:600;cursor:pointer;border:none;
+  font-family:var(--mono);transition:all .15s;
+}
+.btn-sm:active{transform:scale(.96)}
+.btn-sm-op{background:var(--op-bg);color:var(--op);border:1px solid rgba(0,200,160,.2)}
+.btn-sm-n1{background:var(--n1-bg);color:var(--n1);border:1px solid rgba(240,160,48,.2)}
+.btn-sm-n3{background:var(--n3-bg);color:var(--n3);border:1px solid rgba(192,96,255,.2)}
+.btn-sm-ghost{background:var(--bg3);color:var(--txt2);border:1px solid var(--border)}
+
+/* Fields */
+.field{margin-bottom:14px}
+.field-label{font-size:0.75em;font-weight:600;color:var(--txt2);margin-bottom:6px;display:block;letter-spacing:.04em}
+.field-label.req::after{content:" *";color:var(--crit)}
+.field-hint{font-size:0.72em;color:var(--muted);margin-top:4px}
+
+.input{
+  display:block;width:100%;padding:12px 14px;border-radius:var(--radius);
+  background:var(--bg3);border:1.5px solid var(--border2);color:var(--txt);
+  font-size:0.93em;transition:border-color .2s;
+}
+.input:focus{border-color:var(--op)}
+.input-mono{font-family:var(--mono)}
+select.input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237aa0c0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:16px}
+textarea.input{min-height:80px;line-height:1.5}
+
+/* Choice buttons */
+.choices{display:flex;gap:8px;flex-wrap:wrap}
+.choices.col{flex-direction:column}
+.choice{
+  flex:1;min-width:80px;padding:10px 8px;border-radius:var(--radius-sm);
+  border:1.5px solid var(--border2);background:var(--bg3);color:var(--txt2);
+  font-size:0.8em;font-weight:600;text-align:center;cursor:pointer;transition:all .15s;
+}
+.choice:active{transform:scale(.96)}
+.choice.sel{border-color:var(--op);background:var(--op-bg);color:var(--op)}
+.choice.sel-urg{border-color:var(--urg);background:var(--urg-bg);color:var(--urg)}
+.choice.sel-crit{border-color:var(--crit);background:var(--crit-bg);color:var(--crit)}
+
+/* Step progress */
+.step-bar{display:flex;gap:5px;margin-bottom:12px}
+.step-seg{flex:1;height:3px;border-radius:2px;background:var(--border);transition:background .3s}
+.step-seg.done{background:var(--op)}
+.step-seg.active{background:var(--op);opacity:.5}
+.step-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.step-num{
+  width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:0.8em;font-weight:700;flex-shrink:0;
+}
+.step-num.op-c{background:var(--op);color:#0a0e14}
+.step-info-wrap{}
+.step-phase{font-family:var(--mono);font-size:0.68em;color:var(--muted);letter-spacing:.08em}
+.step-title-s{font-size:0.9em;font-weight:700;color:var(--txt)}
+
+/* Visual modes */
+.tab-row{display:flex;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);margin-bottom:12px}
+.tab-btn{flex:1;padding:9px;font-size:0.75em;font-weight:600;background:var(--bg3);color:var(--muted);cursor:pointer;transition:all .15s;border:none;font-family:var(--font)}
+.tab-btn.active{background:var(--op);color:#0a0e14}
+
+/* Photo */
+.photo-drop{
+  border:2px dashed var(--border2);border-radius:var(--radius);
+  padding:24px;text-align:center;cursor:pointer;background:var(--bg3);
+  transition:border-color .2s;
+}
+.photo-drop:active,.photo-drop:hover{border-color:var(--op)}
+.photo-drop .drop-icon{font-size:2.4em;margin-bottom:8px}
+.photo-drop p{font-size:0.82em;color:var(--muted)}
+.photo-list{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.photo-thumb{position:relative;width:80px;height:80px}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;border-radius:8px}
+.photo-thumb .rm{
+  position:absolute;top:-6px;right:-6px;width:20px;height:20px;
+  background:var(--crit);color:white;border-radius:50%;
+  font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+}
+
+/* Canvas */
+.canvas-wrap{border-radius:var(--radius);overflow:hidden;background:white;touch-action:none}
+#drawing-canvas,#annot-canvas{display:block;width:100%;touch-action:none}
+.draw-tools{
+  display:flex;gap:6px;flex-wrap:wrap;padding:8px;
+  background:var(--bg3);border:1px solid var(--border);border-top:none;
+  border-radius:0 0 var(--radius) var(--radius);
+}
+.tool-btn{
+  padding:7px 9px;border-radius:6px;font-size:0.8em;
+  background:var(--bg2);border:1px solid var(--border);color:var(--txt2);
+  cursor:pointer;transition:all .15s;
+}
+.tool-btn.active{background:var(--op-bg);border-color:var(--op);color:var(--op)}
+.tool-btn:active{transform:scale(.94)}
+input[type=color]{width:30px;height:30px;border-radius:6px;border:none;cursor:pointer;padding:2px;background:transparent}
+
+/* Analyse tools */
+.tool-tabs{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;flex-wrap:wrap}
+.tool-tab{
+  flex:1;min-width:60px;padding:9px 6px;text-align:center;font-size:0.72em;font-weight:600;
+  background:var(--bg3);color:var(--muted);cursor:pointer;transition:all .15s;border:none;
+  font-family:var(--mono);letter-spacing:.03em;
+}
+.tool-tab.active.n1{background:var(--n1-bg);color:var(--n1)}
+.tool-tab.active.n3{background:var(--n3-bg);color:var(--n3)}
+
+/* 5P */
+.p5-step{
+  padding:12px;border-radius:var(--radius-sm);background:var(--bg3);
+  border-left:3px solid var(--border2);margin-bottom:8px;
+}
+.p5-step.filled{border-left-color:var(--op)}
+.p5-step.racine{border-left-color:var(--op);background:var(--op-bg)}
+.p5-label{font-family:var(--mono);font-size:0.72em;color:var(--muted);margin-bottom:6px;display:block;letter-spacing:.06em}
+
+/* Ishikawa */
+.ishi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ishi-branch{
+  background:var(--bg3);border-radius:var(--radius-sm);padding:10px;
+  border-left:3px solid var(--n1);
+}
+.ishi-branch-name{font-family:var(--mono);font-size:0.7em;font-weight:600;color:var(--n1);margin-bottom:6px;letter-spacing:.06em}
+
+/* IsNot */
+.isnot-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.isnot-col{background:var(--bg3);border-radius:var(--radius-sm);padding:10px}
+.isnot-col.is{border-top:2px solid var(--op)}
+.isnot-col.isnot{border-top:2px solid var(--crit)}
+.isnot-head{font-family:var(--mono);font-size:0.72em;font-weight:700;margin-bottom:8px;letter-spacing:.06em}
+.isnot-col.is .isnot-head{color:var(--op)}
+.isnot-col.isnot .isnot-head{color:var(--crit)}
+
+/* QQOQCCP */
+.qq-grid{display:flex;flex-direction:column;gap:8px}
+.qq-item{background:var(--bg3);border-radius:var(--radius-sm);padding:10px;border-left:3px solid var(--border2)}
+.qq-item.filled{border-left-color:var(--n1)}
+.qq-label{font-family:var(--mono);font-size:0.7em;font-weight:600;color:var(--txt2);margin-bottom:5px;letter-spacing:.06em}
+
+/* 8D */
+.d8-steps{display:flex;flex-direction:column;gap:8px}
+.d8-step{background:var(--bg3);border-radius:var(--radius-sm);padding:10px}
+.d8-num{font-family:var(--mono);font-size:0.7em;font-weight:700;color:var(--n3);margin-bottom:5px;letter-spacing:.06em}
+
+/* Chat */
+.chat-wrap{
+  display:flex;flex-direction:column;height:320px;border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;background:var(--bg2);
+}
+.chat-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+.msg{max-width:80%}
+.msg.me{align-self:flex-end}
+.msg.other{align-self:flex-start}
+.msg-bubble{
+  padding:8px 12px;border-radius:12px;font-size:0.84em;line-height:1.5;
+  word-break:break-word;
+}
+.msg.me .msg-bubble{background:var(--op);color:#0a0e14;border-bottom-right-radius:3px}
+.msg.other .msg-bubble{background:var(--bg3);color:var(--txt);border-bottom-left-radius:3px}
+.msg-meta{font-size:0.68em;color:var(--muted);margin-top:3px;text-align:right}
+.msg.other .msg-meta{text-align:left}
+.msg-meta .msg-author{font-weight:700}
+.chat-input-row{
+  display:flex;gap:8px;padding:10px;border-top:1px solid var(--border);background:var(--bg3);
+}
+.chat-input{
+  flex:1;padding:10px 12px;border-radius:20px;
+  background:var(--bg2);border:1px solid var(--border2);color:var(--txt);
+  font-size:0.88em;font-family:var(--font);
+}
+.chat-input:focus{border-color:var(--op);outline:none}
+.chat-send{
+  width:38px;height:38px;border-radius:50%;background:var(--op);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  font-size:1em;border:none;flex-shrink:0;transition:all .15s;
+}
+.chat-send:active{transform:scale(.9)}
+.typing-indicator{font-size:0.72em;color:var(--muted);padding:0 12px 4px;font-style:italic;min-height:20px}
+
+/* Detail panel (slide-up modal) */
+.panel-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.panel-overlay.open{opacity:1;pointer-events:auto}
+.panel{
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--bg2);border-radius:20px 20px 0 0;
+  max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  z-index:201;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+  padding-bottom:calc(var(--sab) + 16px);
+}
+.panel.open{transform:translateY(0)}
+.panel-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 0}
+.panel-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--bg2);z-index:10}
+.panel-close{width:30px;height:30px;border-radius:8px;background:var(--bg3);color:var(--txt2);display:flex;align-items:center;justify-content:center;cursor:pointer;margin-left:auto;border:none;font-size:1em}
+.panel-body{padding:16px}
+
+/* PDCA Timeline */
+.pdca-line{display:flex;flex-direction:column;gap:0;margin:12px 0}
+.pdca-item{display:flex;gap:12px;position:relative}
+.pdca-item::before{
+  content:'';position:absolute;left:15px;top:28px;bottom:-8px;
+  width:2px;background:var(--border);
+}
+.pdca-item:last-child::before{display:none}
+.pdca-dot{
+  width:30px;height:30px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:0.72em;font-weight:700;
+  background:var(--bg3);color:var(--muted);border:2px solid var(--border);
+  position:relative;z-index:1;
+}
+.pdca-dot.done{background:var(--op-bg);color:var(--op);border-color:var(--op)}
+.pdca-dot.active{background:var(--n1-bg);color:var(--n1);border-color:var(--n1)}
+.pdca-dot.crit-dot{background:var(--crit-bg);color:var(--crit);border-color:var(--crit)}
+.pdca-content{flex:1;padding:6px 0 16px}
+.pdca-phase{font-family:var(--mono);font-size:0.65em;color:var(--muted);letter-spacing:.08em;margin-bottom:2px}
+.pdca-label-t{font-size:0.85em;font-weight:700;color:var(--txt)}
+.pdca-sub{font-size:0.78em;color:var(--txt2);margin-top:3px;line-height:1.5}
+
+/* Action blocks */
+.action-block{
+  background:var(--bg3);border-radius:var(--radius);padding:14px;
+  border:1px solid var(--border2);margin-top:14px;
+}
+.action-block-title{
+  font-family:var(--mono);font-size:0.72em;font-weight:700;
+  letter-spacing:.08em;margin-bottom:12px;padding-bottom:8px;
+  border-bottom:1px solid var(--border);
+}
+.action-block-title.op-c{color:var(--op)}
+.action-block-title.n1-c{color:var(--n1)}
+.action-block-title.n3-c{color:var(--n3)}
+
+/* Notifications */
+.notif-banner{
+  position:fixed;top:calc(var(--sat) + 60px);left:12px;right:12px;
+  background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);
+  padding:12px 14px;z-index:300;
+  transform:translateY(-120%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+  display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);
+}
+.notif-banner.show{transform:translateY(0)}
+.notif-banner.crit{border-color:var(--crit);background:var(--crit-bg)}
+.notif-icon{font-size:1.4em;flex-shrink:0}
+.notif-body{flex:1;min-width:0}
+.notif-title{font-size:0.85em;font-weight:700;color:var(--txt)}
+.notif-sub{font-size:0.75em;color:var(--txt2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Présence */
+.presence-list{display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--border)}
+.presence-dot{
+  width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:0.72em;font-weight:700;
+  font-family:var(--mono);flex-shrink:0;
+}
+.presence-dot.role-0{background:var(--op-bg);color:var(--op);border:1px solid rgba(0,200,160,.2)}
+.presence-dot.role-1,.presence-dot.role-2{background:var(--n1-bg);color:var(--n1);border:1px solid rgba(240,160,48,.2)}
+.presence-dot.role-3{background:var(--n3-bg);color:var(--n3);border:1px solid rgba(192,96,255,.2)}
+
+/* Success */
+.success-anim{
+  text-align:center;padding:40px 20px;
+}
+.success-ring{
+  width:72px;height:72px;border-radius:50%;
+  background:var(--op-bg);border:3px solid var(--op);
+  display:flex;align-items:center;justify-content:center;
+  font-size:2em;margin:0 auto 20px;
+  animation:ring .4s ease;
+}
+@keyframes ring{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+.success-anim h2{font-size:1.2em;font-weight:700;margin-bottom:8px}
+.success-anim p{font-size:0.85em;color:var(--txt2);line-height:1.6}
+.success-id{font-family:var(--mono);font-size:2em;font-weight:700;color:var(--op);margin:16px 0}
+
+/* Chart */
+.chart-wrap{position:relative;height:180px}
+
+/* Empty */
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty-icon{font-size:2.5em;margin-bottom:10px}
+.empty p{font-size:0.85em}
+
+/* Loading */
+.loading{text-align:center;padding:40px;color:var(--muted)}
+.spin{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--op);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Collapsible */
+.collapse-btn{
+  display:flex;justify-content:space-between;align-items:center;
+  width:100%;padding:11px 14px;border-radius:var(--radius-sm);
+  background:var(--bg3);border:1px solid var(--border);
+  color:var(--txt2);font-size:0.85em;font-weight:600;cursor:pointer;
+  font-family:var(--font);margin-bottom:8px;
+}
+.collapse-btn .caret{transition:transform .2s}
+.collapse-btn.open .caret{transform:rotate(180deg)}
+
+/* Highlight new */
+@keyframes highlight{0%,100%{background:inherit}50%{background:var(--n1-bg)}}
+.new-highlight{animation:highlight 1.5s ease}
+
+/* Toast */
+.toast{
+  position:fixed;bottom:calc(var(--sab) + 70px);left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:var(--bg3);border:1px solid var(--border2);
+  color:var(--txt);padding:10px 18px;border-radius:20px;
+  font-size:0.82em;font-weight:600;z-index:400;
+  opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;
+  box-shadow:var(--shadow);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{border-color:var(--op);color:var(--op)}
+.toast.err{border-color:var(--crit);color:var(--crit)}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══ SPLASH — SÉLECTION RÔLE ══ -->
+<div id="splash">
+  <div class="splash-logo">⚙</div>
+  <div class="splash-title">SRP / Terrain</div>
+  <div class="splash-sub">SYSTÈME PDCA — REMONTÉE PROBLÈMES</div>
+
+  <div class="role-cards" id="roleCards">
+    <div class="role-card op" onclick="pickRole('0')">
+      <div class="role-icon">👷</div>
+      <div class="role-info">
+        <div class="role-name">Opérateur</div>
+        <div class="role-desc">Signaler un problème · Suivre mes remontées</div>
+      </div>
+    </div>
+    <div class="role-card n1" onclick="pickRole('1')">
+      <div class="role-icon">🔧</div>
+      <div class="role-info">
+        <div class="role-name">Niveau 1 / 2 — Terrain & Support</div>
+        <div class="role-desc">Traiter · Analyser · Tester la contre-mesure</div>
+      </div>
+    </div>
+    <div class="role-card n3" onclick="pickRole('3')">
+      <div class="role-icon">📊</div>
+      <div class="role-info">
+        <div class="role-name">Niveau 3 — Responsable AC</div>
+        <div class="role-desc">Piloter · Clôturer · Configurer · Dashboard</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="name-step" id="nameStep">
+    <button class="btn-back" onclick="backToRoles()">← Changer de rôle</button>
+    <div>
+      <label class="name-label" id="nameLabel">VOTRE NOM OU MATRICULE</label>
+      <input class="name-input" id="nameInput" placeholder="Ex: Jean D. ou MAT-042" autocomplete="off">
+    </div>
+    <button class="btn btn-confirm" id="btnConfirm" onclick="confirmIdentity()">ENTRER</button>
+  </div>
+</div>
+
+<!-- ══ NOTIFICATION BANNER ══ -->
+<div class="notif-banner" id="notifBanner">
+  <div class="notif-icon" id="notifIcon">🔔</div>
+  <div class="notif-body">
+    <div class="notif-title" id="notifTitle">Notification</div>
+    <div class="notif-sub" id="notifSub"></div>
+  </div>
+</div>
+
+<!-- ══ APP SHELL ══ -->
+<div id="appShell" style="display:none;flex-direction:column;min-height:100vh">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="tb-logo" id="tbLogo">⚙</div>
+    <div>
+      <div class="tb-title" id="tbTitle">SRP</div>
+      <div class="tb-name" id="tbName"></div>
+    </div>
+    <div class="tb-right">
+      <div id="critBadge" class="tb-badge">0</div>
+      <div class="conn-dot" id="connDot"></div>
+    </div>
+  </div>
+
+  <!-- Présence en ligne -->
+  <div class="presence-list" id="presenceList" style="display:none"></div>
+
+  <!-- Content -->
+  <div class="content" id="mainContent">
+
+    <!-- ══════════════════════════════════
+         OPÉRATEUR — ÉCRANS
+    ══════════════════════════════════ -->
+
+    <!-- Home opérateur -->
+    <div class="screen" id="sc-op-home">
+      <div class="section-label">Tableau de bord</div>
+      <div class="stat-grid">
+        <div class="stat-box"><div class="stat-val op" id="op-stat-total">0</div><div class="stat-lbl">Mes<br>remontées</div></div>
+        <div class="stat-box"><div class="stat-val urg" id="op-stat-open">0</div><div class="stat-lbl">En<br>attente</div></div>
+        <div class="stat-box"><div class="stat-val op" id="op-stat-done">0</div><div class="stat-lbl">Résolues</div></div>
+      </div>
+
+      <button class="btn btn-op" style="margin-bottom:16px" onclick="showScreen('sc-op-form1')">
+        ＋ Signaler un problème
+      </button>
+
+      <div class="section-label">Mes remontées récentes</div>
+      <div id="op-list"></div>
+    </div>
+
+    <!-- Form step 1 -->
+    <div class="screen" id="sc-op-form1">
+      <div class="step-bar">
+        <div class="step-seg active" id="seg1-1"></div>
+        <div class="step-seg" id="seg1-2"></div>
+        <div class="step-seg" id="seg1-3"></div>
+      </div>
+      <div class="step-head">
+        <div class="step-num op-c">1</div>
+        <div class="step-info-wrap">
+          <div class="step-phase">PLAN</div>
+          <div class="step-title-s">Documenter le problème</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label req">Poste concerné</label>
+        <select class="input" id="f-poste"><option value="">Sélectionner...</option></select>
+      </div>
+      <div class="field">
+        <label class="field-label req">Catégorie</label>
+        <div class="choices" id="f-cat-choices"></div>
+      </div>
+      <div class="field">
+        <label class="field-label req">Urgence</label>
+        <div class="choices">
+          <div class="choice" data-urg="Normal" onclick="setUrgence('Normal',this)">🟢 Normal</div>
+          <div class="choice" data-urg="Urgent" onclick="setUrgence('Urgent',this)">🟡 Urgent</div>
+          <div class="choice" data-urg="Critique" onclick="setUrgence('Critique',this)">🔴 Critique</div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label req">Description</label>
+        <textarea class="input" id="f-desc" maxlength="200" placeholder="Décrivez le problème simplement..." rows="3"
+          oninput="document.getElementById('f-desc-count').textContent=this.value.length+'/200'"></textarea>
+        <div class="field-hint" id="f-desc-count">0/200</div>
+      </div>
+
+      <!-- Visual -->
+      <div class="field">
+        <label class="field-label">Documentation visuelle</label>
+        <div class="tab-row">
+          <button class="tab-btn active" onclick="setVisMode('photo',this)">📷 Photo</button>
+          <button class="tab-btn" onclick="setVisMode('croquis',this)">✏️ Croquis</button>
+          <button class="tab-btn" onclick="setVisMode('annot',this)">📌 Annoter</button>
+        </div>
+        <div id="vis-photo">
+          <div class="photo-drop" onclick="document.getElementById('photoIn').click()">
+            <div class="drop-icon">📷</div><p>Appuyer pour prendre une photo</p>
+          </div>
+          <input type="file" accept="image/*" capture="environment" id="photoIn" style="display:none" multiple onchange="handlePhotos(event)">
+          <div class="photo-list" id="photoList"></div>
+        </div>
+        <div id="vis-croquis" style="display:none">
+          <div class="canvas-wrap"><canvas id="drawing-canvas" width="360" height="270"></canvas></div>
+          <div class="draw-tools" id="draw-tools">
+            <button class="tool-btn active" id="tb-pencil" onclick="setDrawTool('pencil')">✏️</button>
+            <button class="tool-btn" id="tb-line" onclick="setDrawTool('line')">╱</button>
+            <button class="tool-btn" id="tb-rect" onclick="setDrawTool('rect')">⬜</button>
+            <button class="tool-btn" id="tb-circle" onclick="setDrawTool('circle')">⭕</button>
+            <input type="color" value="#ff3355" id="drawColor" onchange="setDrawColor(this.value)">
+            <select onchange="setDrawWidth(+this.value)" style="padding:5px 8px;border-radius:6px;background:var(--bg2);border:1px solid var(--border);color:var(--txt2);font-size:0.78em">
+              <option value="2">Fine</option><option value="4" selected>Normale</option><option value="8">Épaisse</option>
+            </select>
+            <button class="tool-btn" onclick="undoDraw()">↩️</button>
+            <button class="tool-btn" onclick="clearDraw()">🗑️</button>
+          </div>
+        </div>
+        <div id="vis-annot" style="display:none">
+          <div id="annot-nophoto" style="background:var(--bg3);border-radius:var(--radius);padding:16px;text-align:center">
+            <p style="font-size:0.82em;color:var(--muted);margin-bottom:10px">Choisissez d'abord une photo</p>
+            <button class="btn btn-ghost" style="max-width:200px;margin:0 auto" onclick="document.getElementById('annotIn').click()">📷 Choisir photo</button>
+            <input type="file" accept="image/*" capture="environment" id="annotIn" style="display:none" onchange="loadAnnot(event)">
+          </div>
+          <div id="annot-zone" style="display:none">
+            <div class="canvas-wrap"><canvas id="annot-canvas" width="360" height="270"></canvas></div>
+            <div class="draw-tools">
+              <button class="tool-btn active" id="atb-pencil" onclick="setAnnotTool('pencil')">✏️</button>
+              <button class="tool-btn" id="atb-circle" onclick="setAnnotTool('circle')">⭕</button>
+              <button class="tool-btn" id="atb-line" onclick="setAnnotTool('line')">➡️</button>
+              <button class="tool-btn" id="atb-rect" onclick="setAnnotTool('rect')">⬜</button>
+              <input type="color" value="#ff3355" id="annotColor" onchange="setAnnotColor(this.value)">
+              <button class="tool-btn" onclick="undoAnnot()">↩️</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="showScreen('sc-op-home')">Annuler</button>
+        <button class="btn btn-op" onclick="goForm2()">Suivant →</button>
+      </div>
+    </div>
+
+    <!-- Form step 2 -->
+    <div class="screen" id="sc-op-form2">
+      <div class="step-bar">
+        <div class="step-seg done"></div><div class="step-seg active"></div><div class="step-seg"></div>
+      </div>
+      <div class="step-head">
+        <div class="step-num op-c">2</div>
+        <div class="step-info-wrap">
+          <div class="step-phase">PLAN</div>
+          <div class="step-title-s">Qualifier l'impact</div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label req">Fréquence</label>
+        <div class="choices col">
+          <div class="choice" data-freq="Première fois" onclick="setChoice(this,'freq','choices-freq')">🆕 Première fois</div>
+          <div class="choice" data-freq="Parfois" onclick="setChoice(this,'freq','choices-freq')">🔄 Parfois</div>
+          <div class="choice" data-freq="Souvent" onclick="setChoice(this,'freq','choices-freq')">⚠️ Souvent</div>
+          <div class="choice" data-freq="En permanence" onclick="setChoice(this,'freq','choices-freq')">🔴 En permanence</div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label req">Déjà signalé ?</label>
+        <div class="choices">
+          <div class="choice" data-recur="true" onclick="setChoice(this,'recurrent','choices-recur')">Oui</div>
+          <div class="choice" data-recur="false" onclick="setChoice(this,'recurrent','choices-recur')">Non</div>
+          <div class="choice" data-recur="false" onclick="setChoice(this,'recurrent','choices-recur')">Ne sais pas</div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label req">Impact</label>
+        <div class="choices col">
+          <div class="choice" data-impact="Arrêt production" onclick="setChoice(this,'impact','choices-impact')">🛑 Arrêt production</div>
+          <div class="choice" data-impact="Ralentissement" onclick="setChoice(this,'impact','choices-impact')">⚠️ Ralentissement</div>
+          <div class="choice" data-impact="Risque qualité" onclick="setChoice(this,'impact','choices-impact')">🔍 Risque qualité</div>
+          <div class="choice" data-impact="Risque sécurité" onclick="setChoice(this,'impact','choices-impact')">⛑️ Risque sécurité</div>
+          <div class="choice" data-impact="Gêne" onclick="setChoice(this,'impact','choices-impact')">💬 Gêne</div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label req">Périmètre touché</label>
+        <div class="choices">
+          <div class="choice" data-perim="Moi seul" onclick="setChoice(this,'perimetre','choices-perim')">👤 Moi seul</div>
+          <div class="choice" data-perim="Mon équipe" onclick="setChoice(this,'perimetre','choices-perim')">👥 Équipe</div>
+          <div class="choice" data-perim="Tout l'atelier" onclick="setChoice(this,'perimetre','choices-perim')">🏭 Atelier</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="showScreen('sc-op-form1')">← Retour</button>
+        <button class="btn btn-op" onclick="goForm3()">Suivant →</button>
+      </div>
+    </div>
+
+    <!-- Form step 3 -->
+    <div class="screen" id="sc-op-form3">
+      <div class="step-bar">
+        <div class="step-seg done"></div><div class="step-seg done"></div><div class="step-seg active"></div>
+      </div>
+      <div class="step-head">
+        <div class="step-num op-c">3</div>
+        <div class="step-info-wrap">
+          <div class="step-phase">PLAN</div>
+          <div class="step-title-s">Ce que vous savez (optionnel)</div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Idée de solution</label>
+        <textarea class="input" id="f-prop" placeholder="Votre proposition..." rows="3"></textarea>
+      </div>
+      <div class="field">
+        <label class="field-label">Ce que j'ai essayé</label>
+        <textarea class="input" id="f-essaye" placeholder="Actions déjà tentées..." rows="2"></textarea>
+      </div>
+      <div class="field">
+        <label class="field-label">Infos utiles</label>
+        <textarea class="input" id="f-infos" placeholder="Réf. pièce, n° OF, conditions..." rows="2"></textarea>
+      </div>
+
+      <!-- 5 Pourquoi -->
+      <button class="collapse-btn" id="btn5p" onclick="toggle5P()">
+        <span>🔍 Analyse 5 Pourquoi</span><span class="caret">▼</span>
+      </button>
+      <div id="zone-5p" style="display:none">
+        <div class="p5-step" id="p5s-1"><span class="p5-label">POURQUOI 1 — Le problème existe parce que...</span><textarea class="input" id="p5-1" rows="2" placeholder="Pourquoi ?"></textarea></div>
+        <div class="p5-step" id="p5s-2"><span class="p5-label">POURQUOI 2</span><textarea class="input" id="p5-2" rows="2" placeholder="Et pourquoi ça ?"></textarea></div>
+        <div class="p5-step" id="p5s-3"><span class="p5-label">POURQUOI 3</span><textarea class="input" id="p5-3" rows="2" placeholder="Et pourquoi ?"></textarea></div>
+        <div class="p5-step" id="p5s-4"><span class="p5-label">POURQUOI 4</span><textarea class="input" id="p5-4" rows="2" placeholder="Et pourquoi ?"></textarea></div>
+        <div class="p5-step" id="p5s-5"><span class="p5-label">POURQUOI 5</span><textarea class="input" id="p5-5" rows="2" placeholder="Et pourquoi ?"></textarea></div>
+        <div class="p5-step racine"><span class="p5-label" style="color:var(--op)">✓ CAUSE RACINE IDENTIFIÉE</span><textarea class="input" id="p5-cr" rows="2" placeholder="Cause racine..."></textarea></div>
+      </div>
+
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-ghost" onclick="showScreen('sc-op-form2')">← Retour</button>
+        <button class="btn btn-op" id="btn-submit" onclick="submitRemontee()">✅ Soumettre</button>
+      </div>
+    </div>
+
+    <!-- Success -->
+    <div class="screen" id="sc-op-success">
+      <div class="success-anim">
+        <div class="success-ring">✓</div>
+        <h2>Remontée soumise !</h2>
+        <div class="success-id" id="success-id">#——</div>
+        <p>Votre signalement est transmis. Suivez son avancement depuis <strong>Mes remontées</strong>.</p>
+        <button class="btn btn-op" onclick="showScreen('sc-op-home');loadOpData()" style="margin-top:24px">Retour à l'accueil</button>
+      </div>
+    </div>
+
+    <!-- Mes remontées -->
+    <div class="screen" id="sc-op-mes">
+      <div class="section-label">Mes remontées</div>
+      <div id="op-mes-list"></div>
+    </div>
+
+    <!-- ══════════════════════════════════
+         NIVEAU 1/2 — ÉCRANS
+    ══════════════════════════════════ -->
+
+    <!-- Home N1 -->
+    <div class="screen" id="sc-n1-home">
+      <div class="stat-grid">
+        <div class="stat-box"><div class="stat-val urg" id="n1-stat-new">0</div><div class="stat-lbl">Nouvelles</div></div>
+        <div class="stat-box"><div class="stat-val n3" id="n1-stat-esc">0</div><div class="stat-lbl">Escaladées</div></div>
+        <div class="stat-box"><div class="stat-val crit" id="n1-stat-crit">0</div><div class="stat-lbl">Critiques</div></div>
+      </div>
+      <div class="section-label">À traiter — En attente</div>
+      <div id="n1-list-open"></div>
+    </div>
+
+    <!-- Liste filtrée N1 -->
+    <div class="screen" id="sc-n1-list">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <select class="input" id="n1-filter-statut" onchange="loadN1List()" style="flex:1;font-size:0.82em;padding:8px 10px">
+          <option value="">Tous statuts</option>
+          <option value="Nouveau">Nouveau</option>
+          <option value="En cours">En cours</option>
+          <option value="Escaladé">Escaladé</option>
+          <option value="Check">Check</option>
+        </select>
+        <select class="input" id="n1-filter-urg" onchange="loadN1List()" style="flex:1;font-size:0.82em;padding:8px 10px">
+          <option value="">Toutes urgences</option>
+          <option value="Critique">Critique</option>
+          <option value="Urgent">Urgent</option>
+          <option value="Normal">Normal</option>
+        </select>
+      </div>
+      <div id="n1-list-all"></div>
+    </div>
+
+    <!-- ══════════════════════════════════
+         NIVEAU 3 — ÉCRANS
+    ══════════════════════════════════ -->
+
+    <!-- Dashboard N3 -->
+    <div class="screen" id="sc-n3-dash">
+      <div class="stat-grid" style="grid-template-columns:repeat(2,1fr)">
+        <div class="stat-box"><div class="stat-val op" id="n3-total">0</div><div class="stat-lbl">Total soumises</div></div>
+        <div class="stat-box"><div class="stat-val urg" id="n3-open">0</div><div class="stat-lbl">En attente</div></div>
+        <div class="stat-box"><div class="stat-val n3" id="n3-taux">0%</div><div class="stat-lbl">Taux résolution</div></div>
+        <div class="stat-box"><div class="stat-val crit" id="n3-crit">0</div><div class="stat-lbl">Critiques ouvertes</div></div>
+      </div>
+
+      <div class="section-label">Top 5 — Problèmes les plus anciens</div>
+      <div id="n3-top5"></div>
+
+      <div class="section-label">Évolution mensuelle</div>
+      <div class="card"><div class="card-body"><div class="chart-wrap"><canvas id="chartEvol"></canvas></div></div></div>
+
+      <div class="section-label">Pareto catégories</div>
+      <div class="card"><div class="card-body" id="n3-pareto"></div></div>
+    </div>
+
+    <!-- Liste N3 -->
+    <div class="screen" id="sc-n3-list">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <select class="input" id="n3-f-statut" onchange="loadN3List()" style="flex:1;min-width:120px;font-size:0.82em;padding:8px">
+          <option value="">Tous statuts</option>
+          <option value="Nouveau">Nouveau</option><option value="En cours">En cours</option>
+          <option value="Escaladé">Escaladé</option><option value="Check">Check</option>
+          <option value="Résolu">Résolu</option><option value="Clôturé">Clôturé</option>
+        </select>
+        <select class="input" id="n3-f-urg" onchange="loadN3List()" style="flex:1;min-width:100px;font-size:0.82em;padding:8px">
+          <option value="">Urgences</option>
+          <option value="Critique">Critique</option><option value="Urgent">Urgent</option><option value="Normal">Normal</option>
+        </select>
+        <input type="text" class="input" id="n3-f-search" placeholder="🔍 Chercher..." oninput="loadN3List()" style="flex:2;min-width:140px;font-size:0.82em;padding:8px">
+      </div>
+      <div id="n3-list-all"></div>
+    </div>
+
+    <!-- Config N3 -->
+    <div class="screen" id="sc-n3-config">
+      <div class="section-label">Délais d'escalade</div>
+      <div class="card"><div class="card-body">
+        <div class="field"><label class="field-label">Normal (heures)</label><input type="number" class="input input-mono" id="cfg-normal" value="72"></div>
+        <div class="field"><label class="field-label">Urgent (heures)</label><input type="number" class="input input-mono" id="cfg-urgent" value="24"></div>
+        <div class="field"><label class="field-label">Critique (heures)</label><input type="number" class="input input-mono" id="cfg-critique" value="4"></div>
+        <button class="btn btn-n3" onclick="saveDelais()">Sauvegarder délais</button>
+      </div></div>
+      <div class="section-label">Postes de travail</div>
+      <div class="card"><div class="card-body">
+        <div class="field"><label class="field-label">Un poste par ligne</label>
+        <textarea class="input input-mono" id="cfg-postes" rows="10"></textarea></div>
+        <button class="btn btn-n3" onclick="savePostes()">Sauvegarder postes</button>
+      </div></div>
+      <div class="section-label">Export</div>
+      <div class="card"><div class="card-body">
+        <button class="btn btn-ghost" onclick="window.open('/api/export/csv','_blank')">💾 Export CSV complet</button>
+      </div></div>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- Bottom nav (dynamique selon rôle) -->
+  <div class="bottom-nav" id="bottomNav"></div>
+
+</div><!-- /appShell -->
+
+<!-- ══ PANEL DÉTAIL REMONTÉE ══ -->
+<div class="panel-overlay" id="panelOverlay" onclick="closePanel()"></div>
+<div class="panel" id="detailPanel">
+  <div class="panel-handle"></div>
+  <div class="panel-header">
+    <div>
+      <div style="font-family:var(--mono);font-size:0.7em;color:var(--muted);letter-spacing:.08em">REMONTÉE</div>
+      <div style="font-family:var(--mono);font-size:1.1em;font-weight:600" id="panel-id">#——</div>
+    </div>
+    <button class="panel-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="panel-body" id="panel-body">
+    <div class="loading"><div class="spin"></div></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// SRP — Application complète multi-rôles
+// ══════════════════════════════════════════════════════════════
+
+// ── STATE GLOBAL ──────────────────────────────────────────────
+const S = {
+  role: null, name: null, wsId: null,
+  ws: null, wsReady: false,
+  cfg: {}, photos: [], fabCanvas: null, annotCanvas: null,
+  drawTool: 'pencil', annotTool: 'pencil',
+  drawHistory: [], annotHistory: [],
+  visMode: 'photo', annotBase: null,
+  isDrawing: false, annotDrawing: false,
+  startX: 0, startY: 0, activeShape: null,
+  annotStartX: 0, annotStartY: 0, annotActiveShape: null,
+  form: {},
+  currentPanelId: null,
+  charts: {},
+  unreadCrit: 0,
+  soundEnabled: true,
+};
+
+// ── PWA MANIFEST ──────────────────────────────────────────────
+(function(){
+  const m={name:'SRP Terrain',short_name:'SRP',start_url:'./',display:'standalone',
+    background_color:'#0a0e14',theme_color:'#0a0e14',
+    icons:[{src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230a0e14'/><text y='.9em' font-size='80' x='10'>⚙</text></svg>",sizes:'any',type:'image/svg+xml'}]};
+  const b=new Blob([JSON.stringify(m)],{type:'application/manifest+json'});
+  const l=document.getElementById('pwa-manifest');
+  if(l)l.href=URL.createObjectURL(b);
+})();
+
+// ── ROLE PICKER ───────────────────────────────────────────────
+let pendingRole = null;
+
+function pickRole(r) {
+  pendingRole = r;
+  document.getElementById('roleCards').style.display = 'none';
+  const ns = document.getElementById('nameStep');
+  ns.classList.add('visible');
+  const label = document.getElementById('nameLabel');
+  const btn = document.getElementById('btnConfirm');
+  const colors = { '0':'var(--op)', '1':'var(--n1)', '3':'var(--n3)' };
+  const labels = { '0':'OPÉRATEUR — VOTRE NOM', '1':'NIVEAU 1/2 — VOTRE NOM', '3':'RESPONSABLE AC — NOM' };
+  label.textContent = labels[r] || 'VOTRE NOM';
+  btn.style.background = colors[r];
+  btn.style.color = '#0a0e14';
+  const saved = localStorage.getItem('srp_name_'+r);
+  const nameIn = document.getElementById('nameInput');
+  nameIn.value = saved || '';
+  setTimeout(() => nameIn.focus(), 300);
+}
+
+function backToRoles() {
+  document.getElementById('roleCards').style.display = 'flex';
+  document.getElementById('nameStep').classList.remove('visible');
+  pendingRole = null;
+}
+
+function confirmIdentity() {
+  const name = document.getElementById('nameInput').value.trim();
+  if (!name) { showToast('Entrez votre nom', 'err'); return; }
+  S.role = pendingRole;
+  S.name = name;
+  localStorage.setItem('srp_name_'+S.role, name);
+  document.getElementById('splash').style.display = 'none';
+  initApp();
+}
+
+document.getElementById('nameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') confirmIdentity();
+});
+
+// ── INIT APP ──────────────────────────────────────────────────
+async function initApp() {
+  // Topbar
+  const roleNames = {'0':'Opérateur','1':'Niveau 1/2','3':'Responsable AC'};
+  const roleCls = {'0':'op','1':'n1','3':'n3'};
+  const cls = roleCls[S.role];
+  document.getElementById('tbLogo').className = `tb-logo ${cls}`;
+  document.getElementById('tbLogo').textContent = {'0':'👷','1':'🔧','3':'📊'}[S.role];
+  document.getElementById('tbTitle').textContent = `SRP — ${roleNames[S.role]}`;
+  document.getElementById('tbName').textContent = S.name;
+  document.getElementById('appShell').style.display = 'flex';
+  document.getElementById('appShell').style.flexDirection = 'column';
+
+  // Nav
+  renderNav();
+
+  // Config
+  await loadCfg();
+
+  // WebSocket
+  initWS();
+
+  // Load data + première vue
+  if (S.role === '0') {
+    loadOpData();
+    showScreen('sc-op-home');
+  } else if (S.role === '1') {
+    loadN1Data();
+    showScreen('sc-n1-home');
+  } else {
+    loadN3Data();
+    showScreen('sc-n3-dash');
+  }
+}
+
+// ── WEBSOCKET ─────────────────────────────────────────────────
+function initWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${proto}//${location.host}/ws`;
+  S.ws = new WebSocket(wsUrl);
+
+  S.ws.onopen = () => {
+    S.wsReady = true;
+    document.getElementById('connDot').className = 'conn-dot online';
+    S.ws.send(JSON.stringify({ type:'identify', role:S.role, name:S.name }));
+  };
+
+  S.ws.onclose = () => {
+    S.wsReady = false;
+    document.getElementById('connDot').className = 'conn-dot offline';
+    setTimeout(initWS, 3000); // Reconnect
+  };
+
+  S.ws.onerror = () => { S.ws.close(); };
+
+  S.ws.onmessage = (e) => {
+    try { handleWSMsg(JSON.parse(e.data)); } catch {}
+  };
+}
+
+function wsSend(data) {
+  if (S.wsReady) S.ws.send(JSON.stringify(data));
+}
+
+function handleWSMsg(msg) {
+  switch(msg.type) {
+    case 'connected':
+      S.wsId = msg.id;
+      break;
+
+    case 'presence':
+      renderPresence(msg.clients);
+      break;
+
+    case 'nouvelle_remontee':
+      if (S.role === '1' || S.role === '3') {
+        showNotif('🆕', `Nouvelle remontée de ${msg.operateur}`, `${msg.poste} — ${msg.urgence}`, msg.urgence === 'Critique');
+        playSound(msg.urgence === 'Critique' ? 'crit' : 'new');
+        if (S.role === '1') loadN1Data();
+        else loadN3Data();
+      }
+      break;
+
+    case 'alerte_critique':
+      if (S.role !== '0') {
+        showNotif('🚨', `CRITIQUE — ${msg.operateur}`, `Poste : ${msg.poste}`, true);
+        playSound('crit');
+        S.unreadCrit++;
+        const b = document.getElementById('critBadge');
+        b.textContent = S.unreadCrit;
+        b.style.display = 'inline';
+      }
+      break;
+
+    case 'remontee_updated':
+      // Notifier l'opérateur si c'est sa remontée
+      if (S.role === '0') {
+        showNotif('🔄', 'Remontée mise à jour', `#${String(msg.remontee.id).padStart(4,'0')} — ${msg.remontee.statut}`, false);
+        loadOpData();
+      }
+      // Rafraîchir le panel si ouvert
+      if (S.currentPanelId === msg.remontee.id) {
+        openPanel(msg.remontee.id);
+      }
+      if (S.role !== '0') {
+        if (S.role === '1') loadN1Data();
+        else loadN3Data();
+      }
+      break;
+
+    case 'escalade':
+      if (S.role === '1' || S.role === '3') {
+        showNotif('⬆️', `Escalade automatique`, `Remontée #${String(msg.id).padStart(4,'0')}`, false);
+        if (S.role === '1') loadN1Data();
+        else loadN3Data();
+      }
+      break;
+
+    case 'comment':
+      // Ajouter le commentaire au panel si ouvert
+      if (S.currentPanelId === msg.comment.remontee_id) {
+        appendComment(msg.comment);
+      }
+      if (msg.comment.role !== S.role || msg.comment.auteur !== S.name) {
+        showNotif('💬', `${msg.comment.auteur}`, msg.comment.texte.slice(0,60), false);
+      }
+      break;
+
+    case 'typing':
+      if (S.currentPanelId === msg.remonteeId) {
+        const el = document.getElementById('typing-ind');
+        if (el) { el.textContent = `${msg.name} écrit...`; setTimeout(()=>{if(el)el.textContent='';}, 2000); }
+      }
+      break;
+  }
+}
+
+// ── PRÉSENCE ──────────────────────────────────────────────────
+function renderPresence(clients) {
+  const el = document.getElementById('presenceList');
+  if (!clients.length) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = clients.slice(0,8).map(c => {
+    const init = c.name[0]?.toUpperCase() || '?';
+    return `<div class="presence-dot role-${c.role}" title="${c.name} (${['Op.','N1/2','','N3'][+c.role]||''})">${init}</div>`;
+  }).join('') + (clients.length > 8 ? `<div style="font-size:0.72em;color:var(--muted);align-self:center">+${clients.length-8}</div>` : '');
+}
+
+// ── CONFIG ────────────────────────────────────────────────────
+async function loadCfg() {
+  try {
+    const r = await fetch('/api/config');
+    S.cfg = await r.json();
+    const sel = document.getElementById('f-poste');
+    if (sel) {
+      sel.innerHTML = '<option value="">Sélectionner...</option>';
+      (S.cfg.postes||[]).forEach(p => { const o=document.createElement('option'); o.value=o.textContent=p; sel.appendChild(o); });
+    }
+    const catEl = document.getElementById('f-cat-choices');
+    if (catEl) {
+      catEl.innerHTML = '';
+      (S.cfg.categories||[]).forEach(c => {
+        const d=document.createElement('div'); d.className='choice'; d.dataset.cat=c; d.textContent=c;
+        d.onclick=()=>setCat(c,d); catEl.appendChild(d);
+      });
+    }
+  } catch(e) {}
+}
+
+// ── NAV ───────────────────────────────────────────────────────
+const navConfigs = {
+  '0': [
+    {icon:'🏠', label:'Accueil', screen:'sc-op-home', id:'nav-op-home'},
+    {icon:'➕', label:'Signaler', screen:'sc-op-form1', id:'nav-op-form', action:()=>startForm()},
+    {icon:'📋', label:'Mes fiches', screen:'sc-op-mes', id:'nav-op-mes', action:()=>loadOpMes()},
+  ],
+  '1': [
+    {icon:'🏠', label:'À traiter', screen:'sc-n1-home', id:'nav-n1-home'},
+    {icon:'📋', label:'Toutes', screen:'sc-n1-list', id:'nav-n1-list', action:()=>loadN1List()},
+    {icon:'🔍', label:'Base savoir', screen:null, id:'nav-n1-kb', action:()=>showKB()},
+  ],
+  '3': [
+    {icon:'📊', label:'Dashboard', screen:'sc-n3-dash', id:'nav-n3-dash'},
+    {icon:'📋', label:'Fiches', screen:'sc-n3-list', id:'nav-n3-list', action:()=>loadN3List()},
+    {icon:'⚙️', label:'Config', screen:'sc-n3-config', id:'nav-n3-config', action:()=>loadN3Config()},
+  ],
+};
+
+function renderNav() {
+  const nav = document.getElementById('bottomNav');
+  const cls = {'0':'op','1':'n1','3':'n3'}[S.role];
+  const items = navConfigs[S.role] || [];
+  nav.innerHTML = items.map(n => `
+    <div class="nav-item" id="${n.id}" onclick="navClick('${n.id}','${n.screen||''}')">
+      <div class="nav-icon">${n.icon}</div>${n.label}
+    </div>
+  `).join('');
+  // Set first active
+  if (items[0]) setNavActive(items[0].id);
+}
+
+function navClick(id, screen) {
+  const cfg = Object.values(navConfigs).flat().find(n => n.id === id);
+  if (cfg?.action) cfg.action();
+  if (screen) showScreen(screen);
+  setNavActive(id);
+}
+
+function setNavActive(id) {
+  const cls = {'0':'op','1':'n1','3':'n3'}[S.role];
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active','op','n1','n3'));
+  const el = document.getElementById(id);
+  if (el) { el.classList.add('active', cls); }
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+  document.getElementById('mainContent').scrollTop = 0;
+}
+
+// ── OP DATA ───────────────────────────────────────────────────
+async function loadOpData() {
+  try {
+    const r = await fetch(`/api/remontees?operateur=${encodeURIComponent(S.name)}`);
+    const all = await r.json();
+    const open = all.filter(x => !['Résolu','Clôturé'].includes(x.statut));
+    const done = all.filter(x => ['Résolu','Clôturé'].includes(x.statut));
+    document.getElementById('op-stat-total').textContent = all.length;
+    document.getElementById('op-stat-open').textContent = open.length;
+    document.getElementById('op-stat-done').textContent = done.length;
+    renderRList(all.slice(0,5), 'op-list');
+  } catch {}
+}
+
+async function loadOpMes() {
+  try {
+    const r = await fetch(`/api/remontees?operateur=${encodeURIComponent(S.name)}`);
+    renderRList(await r.json(), 'op-mes-list');
+  } catch {}
+}
+
+// ── N1 DATA ───────────────────────────────────────────────────
+async function loadN1Data() {
+  try {
+    const r = await fetch('/api/stats');
+    const s = await r.json();
+    document.getElementById('n1-stat-new').textContent = s.en_attente_n1 || 0;
+    document.getElementById('n1-stat-esc').textContent = s.en_attente_n2 || 0;
+    document.getElementById('n1-stat-crit').textContent = s.critiques_ouverts || 0;
+    const r2 = await fetch('/api/remontees?ouvert=true');
+    renderRList(await r2.json(), 'n1-list-open');
+  } catch {}
+}
+
+async function loadN1List() {
+  const statut = document.getElementById('n1-filter-statut')?.value || '';
+  const urg = document.getElementById('n1-filter-urg')?.value || '';
+  let url = '/api/remontees?';
+  if (statut) url += `statut=${encodeURIComponent(statut)}&`;
+  if (urg) url += `urgence=${encodeURIComponent(urg)}&`;
+  try {
+    const r = await fetch(url);
+    renderRList(await r.json(), 'n1-list-all');
+  } catch {}
+}
+
+// ── N3 DATA ───────────────────────────────────────────────────
+async function loadN3Data() {
+  try {
+    const r = await fetch('/api/stats');
+    const s = await r.json();
+    document.getElementById('n3-total').textContent = s.total || 0;
+    document.getElementById('n3-open').textContent = s.ouverts || 0;
+    document.getElementById('n3-taux').textContent = (s.taux || 0) + '%';
+    document.getElementById('n3-crit').textContent = s.critiques_ouverts || 0;
+    renderTop5(s.top5 || []);
+    renderEvol(s.evolution || []);
+    renderPareto(s.parCategorie || []);
+  } catch {}
+}
+
+async function loadN3List() {
+  const statut = document.getElementById('n3-f-statut')?.value || '';
+  const urg = document.getElementById('n3-f-urg')?.value || '';
+  const search = document.getElementById('n3-f-search')?.value?.toLowerCase() || '';
+  try {
+    let url = '/api/remontees?';
+    if (statut) url += `statut=${encodeURIComponent(statut)}&`;
+    if (urg) url += `urgence=${encodeURIComponent(urg)}&`;
+    let data = await (await fetch(url)).json();
+    if (search) data = data.filter(r => r.description.toLowerCase().includes(search)||r.operateur.toLowerCase().includes(search)||r.poste.toLowerCase().includes(search));
+    renderRList(data, 'n3-list-all');
+  } catch {}
+}
+
+async function loadN3Config() {
+  await loadCfg();
+  document.getElementById('cfg-normal').value = S.cfg.delai_escalade_normal_h || 72;
+  document.getElementById('cfg-urgent').value = S.cfg.delai_escalade_urgent_h || 24;
+  document.getElementById('cfg-critique').value = S.cfg.delai_escalade_critique_h || 4;
+  document.getElementById('cfg-postes').value = (S.cfg.postes || []).join('\n');
+}
+
+async function saveDelais() {
+  await Promise.all([
+    fetch('/api/config/delai_escalade_normal_h',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({valeur:document.getElementById('cfg-normal').value})}),
+    fetch('/api/config/delai_escalade_urgent_h',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({valeur:document.getElementById('cfg-urgent').value})}),
+    fetch('/api/config/delai_escalade_critique_h',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({valeur:document.getElementById('cfg-critique').value})}),
+  ]);
+  showToast('Délais sauvegardés ✓', 'ok');
+}
+
+async function savePostes() {
+  const postes = document.getElementById('cfg-postes').value.split('\n').map(p=>p.trim()).filter(Boolean);
+  await fetch('/api/config/postes',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({valeur:postes})});
+  await loadCfg();
+  showToast('Postes sauvegardés ✓', 'ok');
+}
+
+// ── RENDER LISTE ──────────────────────────────────────────────
+function renderRList(data, elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!data.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><p>Aucune remontée</p></div>`;
+    return;
+  }
+  el.innerHTML = data.map(r => {
+    const urgCls = r.urgence === 'Critique' ? 'crit' : r.urgence === 'Urgent' ? 'urgent' : 'normal';
+    const ageH = Math.round((Date.now()-new Date(r.created_at).getTime())/3600000);
+    const age = ageH < 1 ? '<1h' : ageH < 24 ? ageH+'h' : Math.round(ageH/24)+'j';
+    return `<div class="r-item" onclick="openPanel(${r.id})">
+      <div class="r-accent ${urgCls}"></div>
+      <div class="r-body">
+        <div class="r-desc">${esc(r.description)}</div>
+        <div class="r-meta">
+          <span>${esc(r.poste)}</span>
+          <span>${r.categorie}</span>
+          <span style="color:var(--muted)">${esc(r.operateur)}</span>
+        </div>
+      </div>
+      <div class="r-right">
+        <span class="badge ${statutBadge(r.statut)}">${r.statut}</span>
+        <span style="font-family:var(--mono);font-size:0.7em;color:var(--muted)">${age}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTop5(list) {
+  const el = document.getElementById('n3-top5');
+  if (!list.length) { el.innerHTML = '<div class="empty" style="padding:20px"><p>Aucune remontée ouverte 🎉</p></div>'; return; }
+  el.innerHTML = list.map(r => {
+    const ageH = Math.round((Date.now()-new Date(r.created_at).getTime())/3600000);
+    const urgCls = r.urgence === 'Critique' ? 'crit' : r.urgence === 'urgent' ? 'urgent' : 'normal';
+    return `<div class="r-item" onclick="openPanel(${r.id})" style="margin-bottom:8px">
+      <div class="r-accent ${urgCls}"></div>
+      <div class="r-body">
+        <div class="r-desc">${esc(r.description)}</div>
+        <div class="r-meta"><span>${esc(r.poste)}</span><span>${r.categorie}</span></div>
+      </div>
+      <div class="r-right">
+        <span class="badge ${urgCls === 'crit' ? 'crit' : urgCls === 'urgent' ? 'urgent' : 'normal'}">${r.urgence}</span>
+        <span style="font-family:var(--mono);font-size:0.7em;color:var(--crit);font-weight:700">+${ageH}h</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderEvol(data) {
+  if (S.charts.evol) S.charts.evol.destroy();
+  const ctx = document.getElementById('chartEvol')?.getContext('2d');
+  if (!ctx) return;
+  S.charts.evol = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: data.map(d=>d.mois),
+      datasets:[
+        {label:'Soumises',data:data.map(d=>d.soumises),borderColor:'#f0a030',backgroundColor:'rgba(240,160,48,.1)',tension:.3,fill:true},
+        {label:'Résolues',data:data.map(d=>d.resolues),borderColor:'#00c8a0',backgroundColor:'rgba(0,200,160,.1)',tension:.3,fill:true}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#7aa0c0',font:{size:11,family:'IBM Plex Mono'}}}},
+      scales:{
+        x:{grid:{color:'#1e3048'},ticks:{color:'#3a5878',font:{size:10}}},
+        y:{grid:{color:'#1e3048'},ticks:{color:'#3a5878',font:{size:10}},beginAtZero:true}
+      }
+    }
+  });
+}
+
+function renderPareto(data) {
+  const el = document.getElementById('n3-pareto');
+  if (!el || !data.length) return;
+  const max = data[0]?.n || 1;
+  el.innerHTML = data.map(c => `
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:0.78em;color:var(--txt2);margin-bottom:4px">
+        <span>${c.categorie}</span><span style="font-family:var(--mono);color:var(--op)">${c.n}</span>
+      </div>
+      <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
+        <div style="height:100%;background:var(--op);width:${Math.round(c.n/max*100)}%;border-radius:3px;transition:width .5s"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── FORM ──────────────────────────────────────────────────────
+function startForm() {
+  S.form = {}; S.photos = [];
+  document.getElementById('photoList').innerHTML = '';
+  ['f-poste','f-desc','f-prop','f-essaye','f-infos'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
+  ['p5-1','p5-2','p5-3','p5-4','p5-5','p5-cr'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
+  document.querySelectorAll('.choice').forEach(c => c.className = 'choice');
+  document.getElementById('f-desc-count').textContent = '0/200';
+  setVisMode('photo');
+  setTimeout(() => initDrawCanvas(), 100);
+  showScreen('sc-op-form1');
+}
+
+function setUrgence(v, el) {
+  S.form.urgence = v;
+  document.querySelectorAll('[data-urg]').forEach(b => {
+    b.className = 'choice' + (b.dataset.urg===v ? (v==='Critique'?' sel-crit':v==='Urgent'?' sel-urg':' sel') : '');
+  });
+}
+
+function setCat(v, el) {
+  S.form.categorie = v;
+  document.querySelectorAll('[data-cat]').forEach(b => b.className = 'choice'+(b.dataset.cat===v?' sel':''));
+}
+
+function setChoice(btn, field, groupAttr) {
+  S.form[field] = btn.dataset[Object.keys(btn.dataset)[0]];
+  const group = btn.closest('.choices');
+  if (group) group.querySelectorAll('.choice').forEach(b => b.className = 'choice');
+  btn.className = 'choice sel';
+}
+
+function goForm2() {
+  if (!document.getElementById('f-poste').value) { showToast('Sélectionnez un poste', 'err'); return; }
+  if (!S.form.categorie) { showToast('Sélectionnez une catégorie', 'err'); return; }
+  if (!S.form.urgence) { showToast("Sélectionnez l'urgence", 'err'); return; }
+  if (!document.getElementById('f-desc').value.trim()) { showToast('Décrivez le problème', 'err'); return; }
+  S.form.poste = document.getElementById('f-poste').value;
+  S.form.description = document.getElementById('f-desc').value.trim();
+  showScreen('sc-op-form2');
+}
+
+function goForm3() {
+  if (!S.form.frequence) { showToast('Indiquez la fréquence', 'err'); return; }
+  if (!S.form.impact) { showToast("Indiquez l'impact", 'err'); return; }
+  if (!S.form.perimetre) { showToast('Indiquez le périmètre', 'err'); return; }
+  showScreen('sc-op-form3');
+}
+
+function toggle5P() {
+  const z = document.getElementById('zone-5p');
+  const b = document.getElementById('btn5p');
+  const open = z.style.display === 'none';
+  z.style.display = open ? 'flex' : 'none';
+  if (open) z.style.flexDirection = 'column';
+  b.classList.toggle('open', open);
+}
+
+async function submitRemontee() {
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true; btn.textContent = '⏳ Envoi...';
+  try {
+    const fd = new FormData();
+    const fields = {
+      operateur: S.name, poste: S.form.poste, categorie: S.form.categorie,
+      urgence: S.form.urgence || 'Normal', description: S.form.description,
+      frequence: S.form.frequence || '', impact: S.form.impact || '',
+      perimetre: S.form.perimetre || '', recurrent: S.form.recurrent || 'false',
+      proposition_operateur: document.getElementById('f-prop').value,
+      infos_utiles: document.getElementById('f-infos').value,
+    };
+    Object.entries(fields).forEach(([k,v]) => fd.append(k, v));
+
+    // 5P
+    const p5 = {};
+    ['1','2','3','4','5'].forEach(i => p5[`pourquoi${i}`] = document.getElementById(`p5-${i}`).value);
+    p5.cause_racine = document.getElementById('p5-cr').value;
+    if (Object.values(p5).some(v=>v)) fd.append('analyse_5p', JSON.stringify(p5));
+
+    // Photos
+    S.photos.forEach(p => fd.append('photo', p.file));
+
+    // Croquis
+    if (S.visMode === 'croquis' && S.fabCanvas) {
+      const blob = await dataURLtoBlob(S.fabCanvas.toDataURL({format:'png',quality:.9}));
+      if (blob) fd.append('croquis', blob, 'croquis.png');
+    }
+
+    // Annotation
+    if (S.visMode === 'annot' && S.annotCanvas && S.annotBase) {
+      const ob = await dataURLtoBlob(S.annotBase);
+      if (ob) fd.append('photo', ob, 'photo_orig.jpg');
+      const ab = await dataURLtoBlob(S.annotCanvas.toDataURL({format:'png',quality:.9}));
+      if (ab) fd.append('annotation', ab, 'annotation.png');
+    }
+
+    const res = await fetch('/api/remontees', {method:'POST', body:fd});
+    const data = await res.json();
+    if (data.id) {
+      document.getElementById('success-id').textContent = '#' + String(data.id).padStart(4,'0');
+      showScreen('sc-op-success');
+      setNavActive(navConfigs['0'][0].id);
+    } else throw new Error(data.error || 'Erreur');
+  } catch(e) {
+    showToast('Erreur : ' + e.message, 'err');
+    btn.disabled = false; btn.textContent = '✅ Soumettre';
+  }
+}
+
+// ── PHOTOS ────────────────────────────────────────────────────
+async function handlePhotos(event) {
+  const files = Array.from(event.target.files);
+  for (const f of files) {
+    if (S.photos.length >= 3) break;
+    const comp = await compressImg(f, 800);
+    const url = await toDataURL(comp);
+    const idx = S.photos.length;
+    S.photos.push({file:comp, url});
+    const list = document.getElementById('photoList');
+    const div = document.createElement('div');
+    div.className = 'photo-thumb'; div.id = `ph-${idx}`;
+    div.innerHTML = `<img src="${url}"><div class="rm" onclick="removePhoto(${idx})">✕</div>`;
+    list.appendChild(div);
+  }
+}
+
+function removePhoto(idx) {
+  S.photos.splice(idx, 1);
+  const list = document.getElementById('photoList'); list.innerHTML = '';
+  S.photos.forEach((p,i) => {
+    const d=document.createElement('div'); d.className='photo-thumb'; d.id=`ph-${i}`;
+    d.innerHTML=`<img src="${p.url}"><div class="rm" onclick="removePhoto(${i})">✕</div>`;
+    list.appendChild(d);
+  });
+}
+
+async function compressImg(file, maxKb=800) {
+  return new Promise(res => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w=img.width, h=img.height;
+      if(w>1920){h=Math.round(h*1920/w);w=1920;}
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      let q=0.85;
+      const t=()=>c.toBlob(b=>{if(b.size/1024>maxKb&&q>0.3){q-=.1;t();}else res(new File([b],file.name,{type:'image/jpeg'}));}, 'image/jpeg', q);
+      t();
+    }; img.src=url;
+  });
+}
+
+function toDataURL(file) {
+  return new Promise(res => { const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
+}
+
+async function dataURLtoBlob(url) {
+  try { return await (await fetch(url)).blob(); } catch { return null; }
+}
+
+// ── CANVAS DRAW ───────────────────────────────────────────────
+function setVisMode(mode, btn) {
+  S.visMode = mode;
+  ['photo','croquis','annot'].forEach(m => {
+    const el = document.getElementById('vis-'+m);
+    if (el) el.style.display = m===mode ? '' : 'none';
+  });
+  if (btn) {
+    btn.closest('.tab-row')?.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  if (mode==='croquis' && !S.fabCanvas) setTimeout(initDrawCanvas, 100);
+  if (mode==='annot' && !S.annotCanvas) setTimeout(initAnnotCanvas, 100);
+}
+
+function initDrawCanvas() {
+  if (S.fabCanvas) { S.fabCanvas.dispose(); S.fabCanvas=null; }
+  const el = document.getElementById('drawing-canvas'); if (!el) return;
+  const w = el.parentElement.offsetWidth || 360;
+  S.fabCanvas = new fabric.Canvas('drawing-canvas', {width:w, height:Math.round(w*.75), isDrawingMode:true, selection:false, backgroundColor:'#ffffff'});
+  S.fabCanvas.freeDrawingBrush.color='#ff3355'; S.fabCanvas.freeDrawingBrush.width=4;
+  setupFabricEvents(S.fabCanvas, 'draw');
+  S.drawHistory = [];
+}
+
+function initAnnotCanvas(photo=null) {
+  if (S.annotCanvas) { S.annotCanvas.dispose(); S.annotCanvas=null; }
+  const el = document.getElementById('annot-canvas'); if (!el) return;
+  const w = el.parentElement.offsetWidth || 360;
+  S.annotCanvas = new fabric.Canvas('annot-canvas', {width:w, height:Math.round(w*.75), isDrawingMode:false, selection:false});
+  if (photo) {
+    fabric.Image.fromURL(photo, img => { img.scaleToWidth(w); S.annotCanvas.setBackgroundImage(img, S.annotCanvas.renderAll.bind(S.annotCanvas)); });
+  }
+  S.annotCanvas.freeDrawingBrush.color='#ff3355'; S.annotCanvas.freeDrawingBrush.width=4;
+  setupFabricEvents(S.annotCanvas, 'annot');
+  S.annotHistory = [];
+}
+
+function setupFabricEvents(canvas, mode) {
+  const isAnnot = mode === 'annot';
+  canvas.on('mouse:down', e => {
+    const tool = isAnnot ? S.annotTool : S.drawTool;
+    if (tool === 'pencil') return;
+    const pt = canvas.getPointer(e.e);
+    if (isAnnot) { S.annotDrawing=true; S.annotStartX=pt.x; S.annotStartY=pt.y; }
+    else { S.isDrawing=true; S.startX=pt.x; S.startY=pt.y; }
+    canvas.isDrawingMode = false;
+    const color = isAnnot ? S.annotCanvas.freeDrawingBrush.color : S.fabCanvas.freeDrawingBrush.color;
+    const width = isAnnot ? 4 : (S.fabCanvas?.freeDrawingBrush?.width || 4);
+    const opts = {stroke:color,strokeWidth:width,fill:'transparent',selectable:false};
+    let shape = null;
+    if (tool==='rect') shape = new fabric.Rect({left:pt.x,top:pt.y,width:0,height:0,...opts});
+    if (tool==='circle') shape = new fabric.Ellipse({left:pt.x,top:pt.y,rx:0,ry:0,...opts});
+    if (tool==='line') shape = new fabric.Line([pt.x,pt.y,pt.x,pt.y],{stroke:color,strokeWidth:width,selectable:false});
+    if (shape) { canvas.add(shape); if(isAnnot)S.annotActiveShape=shape; else S.activeShape=shape; }
+  });
+  canvas.on('mouse:move', e => {
+    const drawing = isAnnot ? S.annotDrawing : S.isDrawing;
+    const shape = isAnnot ? S.annotActiveShape : S.activeShape;
+    const tool = isAnnot ? S.annotTool : S.drawTool;
+    const sx = isAnnot ? S.annotStartX : S.startX;
+    const sy = isAnnot ? S.annotStartY : S.startY;
+    if (!drawing || !shape) return;
+    const pt = canvas.getPointer(e.e);
+    if (tool==='rect') { const w=pt.x-sx,h=pt.y-sy; shape.set({width:Math.abs(w),height:Math.abs(h),left:w<0?pt.x:sx,top:h<0?pt.y:sy}); }
+    if (tool==='circle') shape.set({rx:Math.abs(pt.x-sx)/2,ry:Math.abs(pt.y-sy)/2});
+    if (tool==='line') shape.set({x2:pt.x,y2:pt.y});
+    canvas.renderAll();
+  });
+  canvas.on('mouse:up', () => {
+    if (isAnnot) { if(S.annotDrawing&&S.annotActiveShape){S.annotHistory.push(S.annotActiveShape);S.annotActiveShape=null;} S.annotDrawing=false; }
+    else { if(S.isDrawing&&S.activeShape){S.drawHistory.push(S.activeShape);S.activeShape=null;} S.isDrawing=false; }
+  });
+  canvas.on('path:created', e => {
+    if(isAnnot)S.annotHistory.push(e.path); else S.drawHistory.push(e.path);
+  });
+}
+
+function setDrawTool(t) {
+  S.drawTool=t; if(S.fabCanvas)S.fabCanvas.isDrawingMode=(t==='pencil');
+  document.querySelectorAll('[id^="tb-"]').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`tb-${t}`)?.classList.add('active');
+}
+function setAnnotTool(t) {
+  S.annotTool=t; if(S.annotCanvas)S.annotCanvas.isDrawingMode=(t==='pencil');
+  document.querySelectorAll('[id^="atb-"]').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`atb-${t}`)?.classList.add('active');
+}
+function setDrawColor(c) { if(S.fabCanvas)S.fabCanvas.freeDrawingBrush.color=c; }
+function setAnnotColor(c) { if(S.annotCanvas)S.annotCanvas.freeDrawingBrush.color=c; }
+function setDrawWidth(w) { if(S.fabCanvas)S.fabCanvas.freeDrawingBrush.width=w; }
+function undoDraw() { if(!S.fabCanvas||!S.drawHistory.length)return; S.fabCanvas.remove(S.drawHistory.pop()); S.fabCanvas.renderAll(); }
+function undoAnnot() { if(!S.annotCanvas||!S.annotHistory.length)return; S.annotCanvas.remove(S.annotHistory.pop()); S.annotCanvas.renderAll(); }
+function clearDraw() { if(!S.fabCanvas)return; S.fabCanvas.clear(); S.drawHistory=[]; S.fabCanvas.backgroundColor='#ffffff'; S.fabCanvas.renderAll(); }
+
+function loadAnnot(event) {
+  const file = event.target.files[0]; if(!file) return;
+  const r=new FileReader(); r.onload=e=>{
+    S.annotBase=e.target.result;
+    document.getElementById('annot-nophoto').style.display='none';
+    document.getElementById('annot-zone').style.display='';
+    setTimeout(()=>initAnnotCanvas(S.annotBase),100);
+  }; r.readAsDataURL(file);
+}
+
+// ── PANEL DÉTAIL ──────────────────────────────────────────────
+async function openPanel(id) {
+  S.currentPanelId = id;
+  document.getElementById('panel-id').textContent = '#' + String(id).padStart(4,'0');
+  document.getElementById('panelOverlay').classList.add('open');
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('panel-body').innerHTML = '<div class="loading"><div class="spin"></div></div>';
+  wsSend({ type:'watch', remonteeId:id });
+  try {
+    const r = await fetch(`/api/remontees/${id}`);
+    renderPanel(await r.json());
+  } catch { document.getElementById('panel-body').innerHTML = '<div class="empty">Erreur</div>'; }
+}
+
+function closePanel() {
+  document.getElementById('panelOverlay').classList.remove('open');
+  document.getElementById('detailPanel').classList.remove('open');
+  S.currentPanelId = null;
+}
+
+function renderPanel(r) {
+  const steps = [
+    {num:1,phase:'PLAN',label:'Documentation',done:true},
+    {num:2,phase:'PLAN',label:'Impact qualifié',done:true},
+    {num:3,phase:'PLAN',label:'Analyse / Contre-mesure',done:!!(r.contre_mesure_retenue||r.proposition_operateur)},
+    {num:4,phase:'DO',label:'Test contre-mesure',done:!!r.date_test_debut},
+    {num:5,phase:'CHECK',label:'Vérification',done:!!r.resultat_check},
+    {num:6,phase:'ACT',label:'Standardisation & Clôture',done:r.statut==='Clôturé'},
+  ];
+  const activeStep = steps.findIndex(s=>!s.done);
+
+  let html = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <span class="badge ${urgBadge(r.urgence)}">${r.urgence}</span>
+      <span class="badge ${statutBadge(r.statut)}">${r.statut}</span>
+    </div>
+
+    <div style="background:var(--bg3);border-radius:var(--radius);padding:12px;margin-bottom:14px">
+      <div style="font-size:0.9em;font-weight:600;color:var(--txt);line-height:1.5">${esc(r.description)}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+        <span style="font-size:0.75em;color:var(--txt2)">${esc(r.poste)}</span>
+        <span style="font-size:0.75em;color:var(--muted)">·</span>
+        <span style="font-size:0.75em;color:var(--txt2)">${r.categorie}</span>
+        <span style="font-size:0.75em;color:var(--muted)">·</span>
+        <span style="font-size:0.75em;color:var(--txt2)">${esc(r.operateur)}</span>
+        <span style="font-size:0.75em;color:var(--muted)">·</span>
+        <span style="font-size:0.72em;font-family:var(--mono);color:var(--muted)">${fmtDate(r.created_at)}</span>
+      </div>
+    </div>
+
+    ${r.photo_b64 ? `<img src="${r.photo_b64}" style="width:100%;border-radius:var(--radius);margin-bottom:10px">` : ''}
+    ${r.annotation_b64 ? `<img src="${r.annotation_b64}" style="width:100%;border-radius:var(--radius);margin-bottom:10px">` : ''}
+    ${r.croquis_b64 ? `<img src="${r.croquis_b64}" style="width:100%;border-radius:var(--radius);margin-bottom:10px">` : ''}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:10px">
+        <div style="font-size:0.68em;color:var(--muted);margin-bottom:3px">FRÉQUENCE</div>
+        <div style="font-size:0.82em;color:var(--txt)">${r.frequence||'—'}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:10px">
+        <div style="font-size:0.68em;color:var(--muted);margin-bottom:3px">IMPACT</div>
+        <div style="font-size:0.82em;color:var(--txt)">${r.impact||'—'}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:10px">
+        <div style="font-size:0.68em;color:var(--muted);margin-bottom:3px">PÉRIMÈTRE</div>
+        <div style="font-size:0.82em;color:var(--txt)">${r.perimetre||'—'}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:10px">
+        <div style="font-size:0.68em;color:var(--muted);margin-bottom:3px">RÉCURRENT</div>
+        <div style="font-size:0.82em;color:var(--txt)">${r.recurrent?'Oui':'Non'}</div>
+      </div>
+    </div>
+
+    ${r.proposition_operateur ? `
+    <div style="background:var(--op-bg);border:1px solid rgba(0,200,160,.15);border-radius:var(--radius);padding:12px;margin-bottom:14px">
+      <div style="font-family:var(--mono);font-size:0.68em;color:var(--op);margin-bottom:5px">PROPOSITION OPÉRATEUR</div>
+      <div style="font-size:0.85em;color:var(--txt)">${esc(r.proposition_operateur)}</div>
+    </div>` : ''}
+
+    ${r.analyse_5p ? render5Presult(r.analyse_5p) : ''}
+
+    <!-- Cycle PDCA -->
+    <div style="font-family:var(--mono);font-size:0.68em;color:var(--muted);letter-spacing:.08em;margin:14px 0 10px">CYCLE PDCA</div>
+    <div class="pdca-line">
+      ${steps.map((s,i) => {
+        const isDone = s.done;
+        const isActive = i === activeStep && !isDone;
+        return `<div class="pdca-item">
+          <div class="pdca-dot ${isDone?'done':isActive?'active':''}">${isDone?'✓':s.num}</div>
+          <div class="pdca-content">
+            <div class="pdca-phase">${s.phase}</div>
+            <div class="pdca-label-t">${s.label}</div>
+            ${isActive?`<div class="pdca-sub" style="color:var(--n1)">En attente de traitement</div>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    ${r.contre_mesure_retenue ? `
+    <div style="background:var(--n1-bg);border:1px solid rgba(240,160,48,.15);border-radius:var(--radius);padding:12px;margin-bottom:10px">
+      <div style="font-family:var(--mono);font-size:0.68em;color:var(--n1);margin-bottom:5px">CONTRE-MESURE RETENUE</div>
+      <div style="font-size:0.85em;color:var(--txt)">${esc(r.contre_mesure_retenue)}</div>
+      ${r.responsable_do?`<div style="font-size:0.75em;color:var(--txt2);margin-top:4px">👤 ${esc(r.responsable_do)}</div>`:''}
+    </div>` : ''}
+
+    ${r.resultat_check ? `
+    <div style="background:var(--bg3);border-radius:var(--radius);padding:12px;margin-bottom:10px">
+      <div style="font-family:var(--mono);font-size:0.68em;color:var(--muted);margin-bottom:5px">CHECK</div>
+      <div style="font-size:0.85em;font-weight:700;color:${r.resultat_check==='Résolu totalement'?'var(--op)':r.resultat_check==='Non résolu'?'var(--crit)':'var(--urg)'}">
+        ${r.resultat_check}
+      </div>
+    </div>` : ''}
+
+    ${r.lecon_apprise ? `
+    <div style="background:var(--op-bg);border:1px solid rgba(0,200,160,.2);border-radius:var(--radius);padding:12px;margin-bottom:14px">
+      <div style="font-family:var(--mono);font-size:0.68em;color:var(--op);margin-bottom:5px">💡 LEÇON APPRISE</div>
+      <div style="font-size:0.88em;color:var(--txt);font-weight:600">${esc(r.lecon_apprise)}</div>
+      ${r.standard_cree?`<div style="font-size:0.75em;color:var(--txt2);margin-top:4px">Standard: ${esc(r.standard_cree)}</div>`:''}
+    </div>` : ''}
+
+    <!-- Actions selon rôle et étape -->
+    ${renderPanelActions(r, activeStep)}
+
+    <!-- Chat -->
+    <div style="font-family:var(--mono);font-size:0.68em;color:var(--muted);letter-spacing:.08em;margin:16px 0 10px">💬 COMMENTAIRES</div>
+    <div class="chat-wrap">
+      <div class="chat-msgs" id="chat-msgs">
+        ${(r.commentaires||[]).map(c => renderComment(c)).join('')}
+      </div>
+      <div class="typing-indicator" id="typing-ind"></div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chat-input" placeholder="Votre commentaire..." autocomplete="off"
+          oninput="wsSend({type:'typing',remonteeId:${r.id}})"
+          onkeydown="if(event.key==='Enter')sendComment(${r.id})">
+        <button class="chat-send" onclick="sendComment(${r.id})">➤</button>
+      </div>
+    </div>
+
+    <!-- Historique -->
+    ${r.historique?.length ? `
+    <div style="font-family:var(--mono);font-size:0.68em;color:var(--muted);letter-spacing:.08em;margin:16px 0 10px">HISTORIQUE</div>
+    ${r.historique.map(h=>`
+      <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:0.78em">
+        <div style="color:var(--txt2);font-weight:600">${h.nouveau_statut} — Niv.${h.niveau}</div>
+        <div style="color:var(--muted);margin-top:2px">${fmtDate(h.created_at)}${h.user_label?' · '+esc(h.user_label):''}${h.commentaire?' · '+esc(h.commentaire):''}</div>
+      </div>
+    `).join('')}` : ''}
+  `;
+
+  document.getElementById('panel-body').innerHTML = html;
+  // Scroll chat to bottom
+  const cm = document.getElementById('chat-msgs');
+  if (cm) cm.scrollTop = cm.scrollHeight;
+}
+
+function renderComment(c) {
+  const isMe = c.auteur === S.name;
+  const roleLbl = {'0':'Op.','1':'N1/2','2':'N2','3':'N3'}[c.role] || '';
+  return `<div class="msg ${isMe?'me':'other'}">
+    <div class="msg-bubble">${esc(c.texte)}</div>
+    <div class="msg-meta">${isMe?'':`<span class="msg-author">${esc(c.auteur)}</span> (${roleLbl}) · `}${fmtDate(c.created_at)}</div>
+  </div>`;
+}
+
+function appendComment(c) {
+  const el = document.getElementById('chat-msgs');
+  if (!el) return;
+  const div = document.createElement('div');
+  div.innerHTML = renderComment(c);
+  el.appendChild(div.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+function sendComment(id) {
+  const input = document.getElementById('chat-input');
+  const text = input?.value?.trim();
+  if (!text) return;
+  wsSend({ type:'comment', remonteeId:id, text });
+  // Ajouter localement immédiatement
+  appendComment({ auteur:S.name, role:S.role, texte:text, created_at:new Date().toISOString() });
+  input.value = '';
+}
+
+// ── PANEL ACTIONS ─────────────────────────────────────────────
+function renderPanelActions(r, activeStep) {
+  if (S.role === '0') return ''; // L'opérateur lit seulement
+  if (r.statut === 'Clôturé') return `
+    <div style="background:var(--op-bg);border:1px solid rgba(0,200,160,.2);border-radius:var(--radius);padding:14px;text-align:center;margin-bottom:14px">
+      <div style="color:var(--op);font-weight:700;font-size:1.1em">✓ Clôturé en ${r.delai_resolution_h}h</div>
+    </div>`;
+
+  const id = r.id;
+  let html = `<div style="font-family:var(--mono);font-size:0.68em;color:var(--muted);letter-spacing:.08em;margin:14px 0 10px">ACTIONS</div>`;
+
+  // Outils analyse (N1/2 et N3)
+  if (S.role === '1' || S.role === '3') {
+    html += renderAnalysisTools(r);
+  }
+
+  // DO — contre-mesure
+  if (!r.contre_mesure_retenue || r.statut === 'Nouveau' || r.statut === 'Escaladé') {
+    const cls = S.role==='3' ? 'n3-c' : 'n1-c';
+    html += `<div class="action-block">
+      <div class="action-block-title ${cls}">ÉTAPE 4 — DO · Définir la contre-mesure</div>
+      <label class="field-label">Contre-mesure retenue</label>
+      <textarea class="input" id="act-cm" rows="3" placeholder="Décrivez la solution à tester...">${esc(r.contre_mesure_retenue||'')}</textarea>
+      <label class="field-label" style="margin-top:8px">Responsable du test</label>
+      <input class="input" id="act-resp" placeholder="Nom du responsable" value="${esc(r.responsable_do||S.name)}">
+      <label class="field-label" style="margin-top:8px">Commentaire</label>
+      <input class="input" id="act-comment-do" placeholder="Notes...">
+      <button class="btn ${S.role==='3'?'btn-n3':'btn-n1'}" onclick="actionDO(${id})" style="margin-top:12px">🔨 Enregistrer DO</button>
+    </div>`;
+  }
+
+  // CHECK
+  if (r.contre_mesure_retenue && !r.resultat_check) {
+    html += `<div class="action-block">
+      <div class="action-block-title n1-c">ÉTAPE 5 — CHECK · La contre-mesure a fonctionné ?</div>
+      <div class="choices col" style="margin-bottom:10px">
+        <div class="choice" data-cr="Résolu totalement" onclick="setChoice(this,'check_resultat','')">✅ Résolu totalement</div>
+        <div class="choice" data-cr="Résolu partiellement" onclick="setChoice(this,'check_resultat','')">⚠️ Résolu partiellement</div>
+        <div class="choice" data-cr="Non résolu" onclick="setChoice(this,'check_resultat','')">❌ Non résolu</div>
+      </div>
+      <input class="input" id="act-check-comment" placeholder="Observations..." style="margin-bottom:10px">
+      <button class="btn ${S.role==='3'?'btn-n3':'btn-n1'}" onclick="actionCheck(${id})">✔ Valider CHECK</button>
+    </div>`;
+  }
+
+  // ACT — uniquement N3
+  if (S.role === '3' && r.resultat_check === 'Résolu totalement' && r.statut !== 'Clôturé') {
+    html += `<div class="action-block">
+      <div class="action-block-title n3-c">ÉTAPE 6 — ACT · Standardiser & Clôturer</div>
+      <label class="field-label">Référence standard créé/modifié</label>
+      <input class="input input-mono" id="act-std" placeholder="Ex: PRO-042-REV2" value="${esc(r.standard_cree||'')}">
+      <label class="field-label" style="margin-top:8px">Leçon apprise — en une phrase</label>
+      <textarea class="input" id="act-lecon" rows="2" placeholder="Ce qu'on retient...">${esc(r.lecon_apprise||'')}</textarea>
+      <button class="btn btn-n3" onclick="actionACT(${id})" style="margin-top:12px">🏁 Clôturer — ACT validé</button>
+    </div>`;
+  }
+
+  // Escalade manuelle
+  if (r.niveau_actuel < 2 && (S.role === '1' || S.role === '3')) {
+    html += `<button class="btn btn-danger" onclick="escalade(${id})" style="margin-top:10px">⬆️ Escalader au Niveau 2</button>`;
+  }
+
+  return html;
+}
+
+// ── OUTILS D'ANALYSE ─────────────────────────────────────────
+function renderAnalysisTools(r) {
+  const show8D = S.role === '3';
+  const tabs = ['5P','Ishikawa','Is/Is Not','QQOQCCP', ...(show8D?['8D']:[])];
+  const roleCls = S.role === '3' ? 'n3' : 'n1';
+
+  return `
+  <div style="margin-bottom:14px">
+    <button class="collapse-btn" id="btn-tools" onclick="toggleTools()">
+      <span>🔬 Outils d'analyse</span><span class="caret">▼</span>
+    </button>
+    <div id="zone-tools" style="display:none">
+      <div class="tool-tabs">
+        ${tabs.map((t,i) => `<button class="tool-tab${i===0?' active '+roleCls:''}" onclick="switchTool(this,'tool-${slugify(t)}','${roleCls}')">${t}</button>`).join('')}
+      </div>
+      <div id="tool-5p">${render5PForm(r)}</div>
+      <div id="tool-ishikawa" style="display:none">${renderIshikawaForm(r)}</div>
+      <div id="tool-is-is-not" style="display:none">${renderIsNotForm(r)}</div>
+      <div id="tool-qqoqccp" style="display:none">${renderQQForm(r)}</div>
+      ${show8D ? `<div id="tool-8d" style="display:none">${render8DForm(r)}</div>` : ''}
+      <button class="btn ${S.role==='3'?'btn-n3':'btn-n1'}" onclick="saveAnalyse(${r.id})" style="margin-top:12px">💾 Sauvegarder l'analyse</button>
+    </div>
+  </div>`;
+}
+
+function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,''); }
+
+function toggleTools() {
+  const z=document.getElementById('zone-tools'); const b=document.getElementById('btn-tools');
+  const open=z.style.display==='none'; z.style.display=open?'block':'none'; b.classList.toggle('open',open);
+}
+
+function switchTool(btn, toolId, roleCls) {
+  btn.closest('.tool-tabs').querySelectorAll('.tool-tab').forEach(t => t.className='tool-tab');
+  btn.classList.add('active', roleCls);
+  const container = btn.closest('[id="zone-tools"]') || document.getElementById('zone-tools');
+  container.querySelectorAll('[id^="tool-"]').forEach(el => el.style.display='none');
+  const el = document.getElementById(toolId);
+  if (el) el.style.display='';
+}
+
+function render5PForm(r) {
+  let data = {};
+  try { data = r.analyse_5p ? (typeof r.analyse_5p==='string'?JSON.parse(r.analyse_5p):r.analyse_5p) : {}; } catch {}
+  return `<div style="display:flex;flex-direction:column;gap:8px">
+    ${['1','2','3','4','5'].map(i=>`
+      <div class="p5-step ${data['pourquoi'+i]?'filled':''}">
+        <span class="p5-label">POURQUOI ${i}</span>
+        <textarea class="input" id="t5p-${i}" rows="2" placeholder="Parce que...">${esc(data['pourquoi'+i]||'')}</textarea>
+      </div>`).join('')}
+    <div class="p5-step racine">
+      <span class="p5-label" style="color:var(--op)">✓ CAUSE RACINE</span>
+      <textarea class="input" id="t5p-cr" rows="2" placeholder="Cause identifiée...">${esc(data.cause_racine||'')}</textarea>
+    </div>
+  </div>`;
+}
+
+function renderIshikawaForm(r) {
+  let data = {};
+  try { data = r.analyse_ishikawa ? JSON.parse(r.analyse_ishikawa) : {}; } catch {}
+  const branches = ['Matière','Milieu','Méthode','Matériel',"Main d'œuvre",'Management'];
+  return `<div class="ishi-grid">
+    ${branches.map(b=>`
+      <div class="ishi-branch">
+        <div class="ishi-branch-name">${b.toUpperCase()}</div>
+        <textarea class="input" id="ishi-${slugify(b)}" rows="3" placeholder="Causes...">${esc(data[b]||'')}</textarea>
+      </div>`).join('')}
+  </div>`;
+}
+
+function renderIsNotForm(r) {
+  let data = {};
+  try { data = r.analyse_isnot ? JSON.parse(r.analyse_isnot) : {}; } catch {}
+  const dims = ['Quoi','Où','Quand','Qui','Comment','Combien'];
+  return `<div class="isnot-grid">
+    <div class="isnot-col is"><div class="isnot-head">✓ LE PROBLÈME EST...</div>
+      ${dims.map(d=>`<div style="margin-bottom:6px"><div style="font-size:0.7em;color:var(--muted)">${d}</div><input class="input" id="isnot-is-${slugify(d)}" placeholder="${d}..." value="${esc(data['is_'+d]||'')}"></div>`).join('')}
+    </div>
+    <div class="isnot-col isnot"><div class="isnot-head">✗ LE PROBLÈME N'EST PAS...</div>
+      ${dims.map(d=>`<div style="margin-bottom:6px"><div style="font-size:0.7em;color:var(--muted)">${d}</div><input class="input" id="isnot-not-${slugify(d)}" placeholder="${d}..." value="${esc(data['not_'+d]||'')}"></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderQQForm(r) {
+  let data = {};
+  try { data = r.analyse_qqoqccp ? JSON.parse(r.analyse_qqoqccp) : {}; } catch {}
+  const items = [
+    {k:'qui',label:'QUI — Qui est concerné ?'},
+    {k:'quoi',label:'QUOI — Quel est le problème ?'},
+    {k:'ou',label:'OÙ — Où se passe-t-il ?'},
+    {k:'quand',label:'QUAND — Quand apparaît-il ?'},
+    {k:'comment',label:'COMMENT — Comment se manifeste-t-il ?'},
+    {k:'combien',label:'COMBIEN — Quelle ampleur ?'},
+    {k:'pourquoi',label:'POURQUOI — Pourquoi est-ce un problème ?'},
+  ];
+  return `<div class="qq-grid">
+    ${items.map(it=>`
+      <div class="qq-item ${data[it.k]?'filled':''}">
+        <div class="qq-label">${it.label}</div>
+        <textarea class="input" id="qq-${it.k}" rows="2" placeholder="...">${esc(data[it.k]||'')}</textarea>
+      </div>`).join('')}
+  </div>`;
+}
+
+function render8DForm(r) {
+  let data = {};
+  try { data = r.analyse_8d ? JSON.parse(r.analyse_8d) : {}; } catch {}
+  const ds = [
+    {k:'d1',label:'D1 — Constitution de l\'équipe'},
+    {k:'d2',label:'D2 — Description du problème'},
+    {k:'d3',label:'D3 — Actions de confinement'},
+    {k:'d4',label:'D4 — Identification des causes racines'},
+    {k:'d5',label:'D5 — Actions correctives permanentes'},
+    {k:'d6',label:'D6 — Vérification de l\'efficacité'},
+    {k:'d7',label:'D7 — Actions préventives'},
+    {k:'d8',label:'D8 — Félicitations de l\'équipe'},
+  ];
+  return `<div class="d8-steps">
+    ${ds.map(d=>`
+      <div class="d8-step">
+        <div class="d8-num">${d.label.toUpperCase()}</div>
+        <textarea class="input" id="d8-${d.k}" rows="2" placeholder="...">${esc(data[d.k]||'')}</textarea>
+      </div>`).join('')}
+  </div>`;
+}
+
+function render5Presult(raw) {
+  try {
+    const d = typeof raw==='string'?JSON.parse(raw):raw;
+    const entries = Object.entries(d).filter(([k,v])=>v);
+    if (!entries.length) return '';
+    return `<div style="background:var(--bg3);border-radius:var(--radius);padding:12px;margin-bottom:14px">
+      <div style="font-family:var(--mono);font-size:0.68em;color:var(--op);margin-bottom:8px;letter-spacing:.08em">ANALYSE 5 POURQUOI</div>
+      ${entries.map(([k,v])=>`
+        <div style="margin-bottom:6px">
+          <div style="font-size:0.68em;font-weight:700;color:${k==='cause_racine'?'var(--op)':'var(--muted)'};letter-spacing:.06em">
+            ${k.replace('pourquoi','Pourquoi ').replace('cause_racine','✓ Cause racine').toUpperCase()}
+          </div>
+          <div style="font-size:0.85em;color:var(--txt);margin-top:2px">${esc(v)}</div>
+        </div>`).join('')}
+    </div>`;
+  } catch { return ''; }
+}
+
+async function saveAnalyse(id) {
+  const payload = {};
+  // 5P
+  const p5 = {};
+  ['1','2','3','4','5'].forEach(i=>{const el=document.getElementById(`t5p-${i}`);if(el)p5['pourquoi'+i]=el.value;});
+  const cr=document.getElementById('t5p-cr'); if(cr)p5.cause_racine=cr.value;
+  if(Object.values(p5).some(v=>v)) payload.analyse_5p=JSON.stringify(p5);
+
+  // Ishikawa
+  const branches=['Matière','Milieu','Méthode','Matériel',"Main d'œuvre",'Management'];
+  const ishi={};
+  branches.forEach(b=>{const el=document.getElementById('ishi-'+slugify(b));if(el&&el.value)ishi[b]=el.value;});
+  if(Object.keys(ishi).length) payload.analyse_ishikawa=JSON.stringify(ishi);
+
+  // IsNot
+  const dims=['Quoi','Où','Quand','Qui','Comment','Combien'];
+  const isnot={};
+  dims.forEach(d=>{
+    const ei=document.getElementById('isnot-is-'+slugify(d));
+    const en=document.getElementById('isnot-not-'+slugify(d));
+    if(ei?.value)isnot['is_'+d]=ei.value;
+    if(en?.value)isnot['not_'+d]=en.value;
+  });
+  if(Object.keys(isnot).length) payload.analyse_isnot=JSON.stringify(isnot);
+
+  // QQOQCCP
+  const qq={};
+  ['qui','quoi','ou','quand','comment','combien','pourquoi'].forEach(k=>{
+    const el=document.getElementById('qq-'+k); if(el?.value)qq[k]=el.value;
+  });
+  if(Object.keys(qq).length) payload.analyse_qqoqccp=JSON.stringify(qq);
+
+  // 8D (N3 seulement)
+  if(S.role==='3'){
+    const d8={};
+    ['d1','d2','d3','d4','d5','d6','d7','d8'].forEach(k=>{const el=document.getElementById('d8-'+k);if(el?.value)d8[k]=el.value;});
+    if(Object.keys(d8).length) payload.analyse_8d=JSON.stringify(d8);
+  }
+
+  payload.user_label = S.name;
+  await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showToast('Analyse sauvegardée ✓','ok');
+}
+
+// ── ACTIONS PDCA ──────────────────────────────────────────────
+async function actionDO(id) {
+  const cm = document.getElementById('act-cm')?.value?.trim();
+  if (!cm) { showToast('Entrez la contre-mesure', 'err'); return; }
+  const payload = {
+    contre_mesure_retenue: cm,
+    responsable_do: document.getElementById('act-resp')?.value || S.name,
+    statut: 'En cours', date_test_debut: new Date().toISOString(),
+    niveau_actuel: S.role === '3' ? 3 : 1,
+    user_label: S.name,
+    commentaire: document.getElementById('act-comment-do')?.value || null,
+  };
+  await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showToast('DO enregistré ✓', 'ok');
+  openPanel(id);
+}
+
+async function actionCheck(id) {
+  const choices = document.querySelectorAll('[data-cr]');
+  let resultat = null;
+  choices.forEach(c => { if(c.classList.contains('sel')) resultat = c.dataset.cr; });
+  if (!resultat) { showToast('Sélectionnez le résultat', 'err'); return; }
+  const statut = resultat === 'Non résolu' ? 'En cours' : resultat === 'Résolu totalement' ? 'Check' : 'En cours';
+  await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    resultat_check: resultat, statut, date_check: new Date().toISOString(),
+    user_label: S.name, commentaire: document.getElementById('act-check-comment')?.value || null
+  })});
+  showToast('CHECK enregistré ✓', 'ok');
+  openPanel(id);
+}
+
+async function actionACT(id) {
+  const lecon = document.getElementById('act-lecon')?.value?.trim();
+  if (!lecon) { showToast('Entrez la leçon apprise', 'err'); return; }
+  await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    standard_cree: document.getElementById('act-std')?.value || null,
+    lecon_apprise: lecon, statut: 'Clôturé',
+    niveau_actuel: 3, user_label: S.name
+  })});
+  showToast('🎉 Remontée clôturée !', 'ok');
+  openPanel(id);
+}
+
+async function escalade(id) {
+  await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    niveau_actuel:2, statut:'Escaladé', user_label:S.name, commentaire:'Escalade manuelle'
+  })});
+  showToast('Escaladé au Niveau 2', 'ok');
+  openPanel(id);
+}
+
+// ── BASE DE CONNAISSANCE ──────────────────────────────────────
+async function showKB() {
+  showScreen('sc-n1-list');
+  setNavActive('nav-n1-kb');
+  // Charger les remontées avec leçons
+  const r = await fetch('/api/remontees');
+  const all = await r.json();
+  const kb = all.filter(x => x.lecon_apprise);
+  const el = document.getElementById('n1-list-all');
+  if (!kb.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">💡</div><p>Aucune leçon apprise enregistrée</p></div>'; return; }
+  el.innerHTML = `<div style="font-family:var(--mono);font-size:0.68em;color:var(--muted);letter-spacing:.08em;margin-bottom:10px">BASE DE CONNAISSANCE — ${kb.length} LEÇONS</div>` +
+    kb.map(r=>`
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;cursor:pointer;border-left:3px solid var(--op)" onclick="openPanel(${r.id})">
+      <div style="font-size:0.72em;color:var(--muted);margin-bottom:4px">${r.categorie} · ${esc(r.poste)} · ${fmtDate(r.date_cloture)}</div>
+      <div style="font-size:0.82em;color:var(--txt2);margin-bottom:6px">${esc(r.description)}</div>
+      <div style="font-size:0.88em;color:var(--op);font-weight:600">💡 ${esc(r.lecon_apprise)}</div>
+    </div>`).join('');
+}
+
+// ── NOTIFICATIONS ─────────────────────────────────────────────
+let notifTimer = null;
+function showNotif(icon, title, sub, isCrit) {
+  const b = document.getElementById('notifBanner');
+  document.getElementById('notifIcon').textContent = icon;
+  document.getElementById('notifTitle').textContent = title;
+  document.getElementById('notifSub').textContent = sub;
+  b.className = 'notif-banner show' + (isCrit ? ' crit' : '');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => b.classList.remove('show'), 4000);
+}
+
+function playSound(type) {
+  if (!S.soundEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    if (type === 'crit') {
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(); osc.stop(ctx.currentTime + 0.4);
+    } else {
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.setValueAtTime(554, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+      osc.start(); osc.stop(ctx.currentTime + 0.25);
+    }
+  } catch {}
+}
+
+// ── TOAST ─────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast ${type} show`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── UTILS ─────────────────────────────────────────────────────
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function urgBadge(u) { return u==='Critique'?'crit':u==='Urgent'?'urgent':'normal'; }
+function statutBadge(s) {
+  const m={Nouveau:'nouveau',Escaladé:'escalade','En cours':'encours',Check:'check',Résolu:'resolu',Clôturé:'cloture'};
+  return m[s]||'nouveau';
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d); const diff = Date.now()-dt.getTime();
+  if (diff<60000) return "<1min";
+  if (diff<3600000) return Math.round(diff/60000)+"min";
+  if (diff<86400000) return Math.round(diff/3600000)+"h";
+  return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
+</script>
+</body>
+</html>

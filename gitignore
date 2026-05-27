@@ -1,0 +1,8 @@
+node_modules/
+data/
+*.db
+*.db-journal
+media/
+.env
+.DS_Store
+Thumbs.db
