@@ -677,10 +677,10 @@ input[type=color]{width:30px;height:30px;border-radius:6px;border:none;cursor:po
       </div>
       <div class="field">
         <label class="field-label req">Urgence</label>
-        <div class="choices">
-          <div class="choice" data-urg="Normal" onclick="setUrgence('Normal',this)">🟢 Normal</div>
-          <div class="choice" data-urg="Urgent" onclick="setUrgence('Urgent',this)">🟡 Urgent</div>
-          <div class="choice" data-urg="Critique" onclick="setUrgence('Critique',this)">🔴 Critique</div>
+        <div class="choices" data-field="urgence">
+          <div class="choice" data-value="Normal" onclick="pick(this)">🟢 Normal</div>
+          <div class="choice" data-value="Urgent" onclick="pick(this)">🟡 Urgent</div>
+          <div class="choice" data-value="Critique" onclick="pick(this)">🔴 Critique</div>
         </div>
       </div>
       <div class="field">
@@ -760,37 +760,37 @@ input[type=color]{width:30px;height:30px;border-radius:6px;border:none;cursor:po
       </div>
       <div class="field">
         <label class="field-label req">Fréquence</label>
-        <div class="choices col">
-          <div class="choice" data-freq="Première fois" onclick="setChoice(this,'freq','choices-freq')">🆕 Première fois</div>
-          <div class="choice" data-freq="Parfois" onclick="setChoice(this,'freq','choices-freq')">🔄 Parfois</div>
-          <div class="choice" data-freq="Souvent" onclick="setChoice(this,'freq','choices-freq')">⚠️ Souvent</div>
-          <div class="choice" data-freq="En permanence" onclick="setChoice(this,'freq','choices-freq')">🔴 En permanence</div>
+        <div class="choices col" data-field="frequence">
+          <div class="choice" data-value="Première fois" onclick="pick(this)">🆕 Première fois</div>
+          <div class="choice" data-value="Parfois" onclick="pick(this)">🔄 Parfois</div>
+          <div class="choice" data-value="Souvent" onclick="pick(this)">⚠️ Souvent</div>
+          <div class="choice" data-value="En permanence" onclick="pick(this)">🔴 En permanence</div>
         </div>
       </div>
       <div class="field">
-        <label class="field-label req">Déjà signalé ?</label>
-        <div class="choices">
-          <div class="choice" data-recur="true" onclick="setChoice(this,'recurrent','choices-recur')">Oui</div>
-          <div class="choice" data-recur="false" onclick="setChoice(this,'recurrent','choices-recur')">Non</div>
-          <div class="choice" data-recur="false" onclick="setChoice(this,'recurrent','choices-recur')">Ne sais pas</div>
+        <label class="field-label">Déjà signalé ? <span style="font-weight:400;color:var(--muted);font-size:0.9em">(optionnel)</span></label>
+        <div class="choices" data-field="recurrent">
+          <div class="choice" data-value="true" onclick="pick(this)">Oui</div>
+          <div class="choice" data-value="false" onclick="pick(this)">Non</div>
+          <div class="choice" data-value="false" onclick="pick(this)">Ne sais pas</div>
         </div>
       </div>
       <div class="field">
-        <label class="field-label req">Impact</label>
-        <div class="choices col">
-          <div class="choice" data-impact="Arrêt production" onclick="setChoice(this,'impact','choices-impact')">🛑 Arrêt production</div>
-          <div class="choice" data-impact="Ralentissement" onclick="setChoice(this,'impact','choices-impact')">⚠️ Ralentissement</div>
-          <div class="choice" data-impact="Risque qualité" onclick="setChoice(this,'impact','choices-impact')">🔍 Risque qualité</div>
-          <div class="choice" data-impact="Risque sécurité" onclick="setChoice(this,'impact','choices-impact')">⛑️ Risque sécurité</div>
-          <div class="choice" data-impact="Gêne" onclick="setChoice(this,'impact','choices-impact')">💬 Gêne</div>
+        <label class="field-label">Impact <span style="font-weight:400;color:var(--muted);font-size:0.9em">(plusieurs choix possibles)</span></label>
+        <div class="choices col" data-field="impact" data-multi="true">
+          <div class="choice" data-value="Arrêt production" onclick="pick(this)">🛑 Arrêt production</div>
+          <div class="choice" data-value="Ralentissement" onclick="pick(this)">⚠️ Ralentissement</div>
+          <div class="choice" data-value="Risque qualité" onclick="pick(this)">🔍 Risque qualité</div>
+          <div class="choice" data-value="Risque sécurité" onclick="pick(this)">⛑️ Risque sécurité</div>
+          <div class="choice" data-value="Gêne" onclick="pick(this)">💬 Gêne</div>
         </div>
       </div>
       <div class="field">
-        <label class="field-label req">Périmètre touché</label>
-        <div class="choices">
-          <div class="choice" data-perim="Moi seul" onclick="setChoice(this,'perimetre','choices-perim')">👤 Moi seul</div>
-          <div class="choice" data-perim="Mon équipe" onclick="setChoice(this,'perimetre','choices-perim')">👥 Équipe</div>
-          <div class="choice" data-perim="Tout l'atelier" onclick="setChoice(this,'perimetre','choices-perim')">🏭 Atelier</div>
+        <label class="field-label">Périmètre touché <span style="font-weight:400;color:var(--muted);font-size:0.9em">(optionnel)</span></label>
+        <div class="choices" data-field="perimetre">
+          <div class="choice" data-value="Moi seul" onclick="pick(this)">👤 Moi seul</div>
+          <div class="choice" data-value="Mon équipe" onclick="pick(this)">👥 Équipe</div>
+          <div class="choice" data-value="Tout l'atelier" onclick="pick(this)">🏭 Atelier</div>
         </div>
       </div>
       <div class="btn-row">
@@ -1217,10 +1217,15 @@ async function loadCfg() {
     }
     const catEl = document.getElementById('f-cat-choices');
     if (catEl) {
+      catEl.dataset.field = 'categorie';
       catEl.innerHTML = '';
       (S.cfg.categories||[]).forEach(c => {
-        const d=document.createElement('div'); d.className='choice'; d.dataset.cat=c; d.textContent=c;
-        d.onclick=()=>setCat(c,d); catEl.appendChild(d);
+        const d = document.createElement('div');
+        d.className = 'choice';
+        d.dataset.value = c;
+        d.textContent = c;
+        d.onclick = () => pick(d);
+        catEl.appendChild(d);
       });
     }
   } catch(e) {}
@@ -1470,7 +1475,7 @@ function renderPareto(data) {
 
 // ── FORM ──────────────────────────────────────────────────────
 function startForm() {
-  S.form = {}; S.photos = [];
+  S.form = { impact: [] }; S.photos = [];
   document.getElementById('photoList').innerHTML = '';
   ['f-poste','f-desc','f-prop','f-essaye','f-infos'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
   ['p5-1','p5-2','p5-3','p5-4','p5-5','p5-cr'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
@@ -1481,24 +1486,46 @@ function startForm() {
   showScreen('sc-op-form1');
 }
 
-function setUrgence(v, el) {
-  S.form.urgence = v;
-  document.querySelectorAll('[data-urg]').forEach(b => {
-    b.className = 'choice' + (b.dataset.urg===v ? (v==='Critique'?' sel-crit':v==='Urgent'?' sel-urg':' sel') : '');
-  });
+// ── FONCTION UNIVERSELLE DE SÉLECTION ────────────────────────
+// Une seule fonction pour tous les boutons choix.
+// Le groupe parent porte data-field="nom_du_champ"
+// Le bouton porte data-value="valeur"
+// Le groupe peut porter data-multi="true" pour la multi-sélection
+function pick(btn) {
+  const group = btn.closest('[data-field]');
+  if (!group) return;
+  const field = group.dataset.field;
+  const val = btn.dataset.value;
+  const isMulti = group.dataset.multi === 'true';
+
+  if (isMulti) {
+    // Toggle multi-sélection
+    if (!Array.isArray(S.form[field])) S.form[field] = [];
+    const idx = S.form[field].indexOf(val);
+    if (idx >= 0) {
+      S.form[field].splice(idx, 1);
+      btn.classList.remove('sel');
+    } else {
+      S.form[field].push(val);
+      btn.classList.add('sel');
+    }
+  } else {
+    // Mono-sélection — déselectionner tout le groupe
+    S.form[field] = val;
+    group.querySelectorAll('.choice').forEach(b => b.classList.remove('sel','sel-urg','sel-crit'));
+    // Couleur selon urgence
+    if (field === 'urgence') {
+      btn.classList.add(val === 'Critique' ? 'sel-crit' : val === 'Urgent' ? 'sel-urg' : 'sel');
+    } else {
+      btn.classList.add('sel');
+    }
+  }
 }
 
-function setCat(v, el) {
-  S.form.categorie = v;
-  document.querySelectorAll('[data-cat]').forEach(b => b.className = 'choice'+(b.dataset.cat===v?' sel':''));
-}
-
-function setChoice(btn, field, groupAttr) {
-  S.form[field] = btn.dataset[Object.keys(btn.dataset)[0]];
-  const group = btn.closest('.choices');
-  if (group) group.querySelectorAll('.choice').forEach(b => b.className = 'choice');
-  btn.className = 'choice sel';
-}
+// Conservées pour compatibilité — délèguent vers pick()
+function setUrgence(v, el) { if(el) pick(el); }
+function setCat(v, el) { if(el) pick(el); }
+function setChoice(btn) { pick(btn); }
 
 function goForm2() {
   if (!document.getElementById('f-poste').value) { showToast('Sélectionnez un poste', 'err'); return; }
@@ -1507,13 +1534,13 @@ function goForm2() {
   if (!document.getElementById('f-desc').value.trim()) { showToast('Décrivez le problème', 'err'); return; }
   S.form.poste = document.getElementById('f-poste').value;
   S.form.description = document.getElementById('f-desc').value.trim();
+  // Reset impact à chaque passage en étape 2
+  S.form.impact = [];
   showScreen('sc-op-form2');
 }
 
 function goForm3() {
   if (!S.form.frequence) { showToast('Indiquez la fréquence', 'err'); return; }
-  if (!S.form.impact) { showToast("Indiquez l'impact", 'err'); return; }
-  if (!S.form.perimetre) { showToast('Indiquez le périmètre', 'err'); return; }
   showScreen('sc-op-form3');
 }
 
@@ -1534,7 +1561,8 @@ async function submitRemontee() {
     const fields = {
       operateur: S.name, poste: S.form.poste, categorie: S.form.categorie,
       urgence: S.form.urgence || 'Normal', description: S.form.description,
-      frequence: S.form.frequence || '', impact: S.form.impact || '',
+      frequence: S.form.frequence || '', 
+      impact: Array.isArray(S.form.impact) ? S.form.impact.join(', ') : (S.form.impact || ''),
       perimetre: S.form.perimetre || '', recurrent: S.form.recurrent || 'false',
       proposition_operateur: document.getElementById('f-prop').value,
       infos_utiles: document.getElementById('f-infos').value,
