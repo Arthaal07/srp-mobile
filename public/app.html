@@ -700,9 +700,24 @@ input[type=color]{width:30px;height:30px;border-radius:6px;border:none;cursor:po
         </div>
         <div id="vis-photo">
           <div class="photo-drop" onclick="document.getElementById('photoIn').click()">
-            <div class="drop-icon">📷</div><p>Appuyer pour prendre une photo</p>
+            <div class="drop-icon">📷</div>
+            <p>Appareil photo ou galerie</p>
           </div>
+          <!-- Deux inputs : caméra directe et galerie -->
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-ghost" style="flex:1;padding:10px;font-size:0.82em"
+              onclick="document.getElementById('photoIn').click()">
+              📷 Prendre une photo
+            </button>
+            <button class="btn btn-ghost" style="flex:1;padding:10px;font-size:0.82em"
+              onclick="document.getElementById('photoGallery').click()">
+              🖼️ Depuis la galerie
+            </button>
+          </div>
+          <!-- capture=environment = ouvre directement la caméra -->
           <input type="file" accept="image/*" capture="environment" id="photoIn" style="display:none" multiple onchange="handlePhotos(event)">
+          <!-- Sans capture = ouvre le sélecteur de fichier (galerie) -->
+          <input type="file" accept="image/*" id="photoGallery" style="display:none" multiple onchange="handlePhotos(event)">
           <div class="photo-list" id="photoList"></div>
         </div>
         <div id="vis-croquis" style="display:none">
@@ -722,9 +737,15 @@ input[type=color]{width:30px;height:30px;border-radius:6px;border:none;cursor:po
         </div>
         <div id="vis-annot" style="display:none">
           <div id="annot-nophoto" style="background:var(--bg3);border-radius:var(--radius);padding:16px;text-align:center">
-            <p style="font-size:0.82em;color:var(--muted);margin-bottom:10px">Choisissez d'abord une photo</p>
-            <button class="btn btn-ghost" style="max-width:200px;margin:0 auto" onclick="document.getElementById('annotIn').click()">📷 Choisir photo</button>
+            <p style="font-size:0.82em;color:var(--muted);margin-bottom:10px">Choisissez une photo de base</p>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost" style="flex:1;padding:10px;font-size:0.82em"
+                onclick="document.getElementById('annotIn').click()">📷 Caméra</button>
+              <button class="btn btn-ghost" style="flex:1;padding:10px;font-size:0.82em"
+                onclick="document.getElementById('annotGallery').click()">🖼️ Galerie</button>
+            </div>
             <input type="file" accept="image/*" capture="environment" id="annotIn" style="display:none" onchange="loadAnnot(event)">
+            <input type="file" accept="image/*" id="annotGallery" style="display:none" onchange="loadAnnot(event)">
           </div>
           <div id="annot-zone" style="display:none">
             <div class="canvas-wrap"><canvas id="annot-canvas" width="360" height="270"></canvas></div>
@@ -1598,7 +1619,10 @@ async function submitRemontee() {
       perimetre: S.form.perimetre || '',
       recurrent: S.form.recurrent || 'false',
       proposition_operateur: document.getElementById('f-prop').value,
-      infos_utiles: document.getElementById('f-infos').value,
+      infos_utiles: [
+        document.getElementById('f-essaye').value ? ('Déjà essayé : ' + document.getElementById('f-essaye').value) : '',
+        document.getElementById('f-infos').value
+      ].filter(Boolean).join(' | '),
     };
     Object.entries(fields).forEach(([k,v]) => fd.append(k, v));
 
@@ -1626,12 +1650,22 @@ async function submitRemontee() {
     }
 
     const res = await fetch('/api/remontees', {method:'POST', body:fd});
+
+    // Vérifier d'abord que la réponse HTTP est OK
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Erreur serveur (${res.status})`);
+    }
+
     const data = await res.json();
-    if (data.id) {
+    // data.ok est true même si id=0 (première remontée)
+    if (data.ok) {
       document.getElementById('success-id').textContent = '#' + String(data.id).padStart(4,'0');
       showScreen('sc-op-success');
       setNavActive(navConfigs['0'][0].id);
-    } else throw new Error(data.error || 'Erreur');
+    } else {
+      throw new Error(data.error || 'Réponse inattendue du serveur');
+    }
   } catch(e) {
     showToast('Erreur : ' + e.message, 'err');
     btn.disabled = false; btn.textContent = '✅ Soumettre';

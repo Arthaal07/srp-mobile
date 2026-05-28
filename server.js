@@ -218,36 +218,57 @@ app.patch('/api/config/:cle', (req, res) => {
 app.post('/api/remontees',
   upload.fields([{name:'photo',max:3},{name:'croquis',max:1},{name:'annotation',max:1}]),
   (req, res) => {
-    const d = req.body, f = req.files || {};
-    const result = dbRun(`
-      INSERT INTO remontees (operateur,poste,categorie,urgence,description,
-        photo_b64,croquis_b64,annotation_b64,frequence,impact,perimetre,recurrent,
-        proposition_operateur,infos_utiles,analyse_5p,statut,niveau_actuel)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `, [
-      d.operateur, d.poste, d.categorie, d.urgence||'Normal', d.description,
-      f.photo?.[0] ? toB64(f.photo[0]) : null,
-      f.croquis?.[0] ? toB64(f.croquis[0]) : null,
-      f.annotation?.[0] ? toB64(f.annotation[0]) : null,
-      d.frequence||null, d.impact||null, d.perimetre||null,
-      d.recurrent==='true'?1:0,
-      d.proposition_operateur||null, d.infos_utiles||null, d.analyse_5p||null,
-      'Nouveau', 1
-    ]);
-    const id = result.lastInsertRowid;
-    dbRun('INSERT INTO historique_statuts (remontee_id,nouveau_statut,niveau,user_label) VALUES (?,?,?,?)',
-      [id, 'Nouveau', 1, d.operateur]);
+    try {
+      const d = req.body, f = req.files || {};
 
-    // Notifier les niveaux 1/2/3 en temps réel
-    const payload = {
-      type: 'nouvelle_remontee',
-      id, urgence: d.urgence, poste: d.poste,
-      operateur: d.operateur, description: d.description
-    };
-    broadcastToRoles(['1','2','3'], payload);
-    if (d.urgence === 'Critique') broadcast({ type: 'alerte_critique', id, poste: d.poste, operateur: d.operateur });
+      // Validation champs obligatoires
+      if (!d.operateur?.trim()) return res.status(400).json({ error: 'Opérateur manquant' });
+      if (!d.poste?.trim())     return res.status(400).json({ error: 'Poste manquant' });
+      if (!d.description?.trim()) return res.status(400).json({ error: 'Description manquante' });
 
-    res.json({ id, statut: 'Nouveau' });
+      const result = dbRun(`
+        INSERT INTO remontees (operateur,poste,categorie,urgence,description,
+          photo_b64,croquis_b64,annotation_b64,frequence,impact,perimetre,recurrent,
+          proposition_operateur,infos_utiles,analyse_5p,statut,niveau_actuel)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      `, [
+        d.operateur.trim(), d.poste.trim(),
+        d.categorie||'Autre', d.urgence||'Normal', d.description.trim(),
+        f.photo?.[0] ? toB64(f.photo[0]) : null,
+        f.croquis?.[0] ? toB64(f.croquis[0]) : null,
+        f.annotation?.[0] ? toB64(f.annotation[0]) : null,
+        d.frequence||null, d.impact||null, d.perimetre||null,
+        d.recurrent==='true'?1:0,
+        d.proposition_operateur||null, d.infos_utiles||null, d.analyse_5p||null,
+        'Nouveau', 1
+      ]);
+
+      const id = result.lastInsertRowid;
+
+      // id peut être 0 (première remontée) — on vérifie avec !== undefined
+      if (id === undefined || id === null) {
+        return res.status(500).json({ error: 'Erreur insertion base de données' });
+      }
+
+      dbRun('INSERT INTO historique_statuts (remontee_id,nouveau_statut,niveau,user_label) VALUES (?,?,?,?)',
+        [id, 'Nouveau', 1, d.operateur]);
+
+      broadcastToRoles(['1','2','3'], {
+        type: 'nouvelle_remontee',
+        id, urgence: d.urgence, poste: d.poste,
+        operateur: d.operateur, description: d.description
+      });
+      if (d.urgence === 'Critique') broadcast({
+        type: 'alerte_critique', id, poste: d.poste, operateur: d.operateur
+      });
+
+      // Retourner success avec id explicitement converti
+      res.json({ id: Number(id), statut: 'Nouveau', ok: true });
+
+    } catch(e) {
+      console.error('POST /remontees error:', e.message);
+      res.status(500).json({ error: e.message || 'Erreur serveur' });
+    }
   }
 );
 
