@@ -1094,12 +1094,17 @@ async function initApp() {
 
 // ── WEBSOCKET ─────────────────────────────────────────────────
 function initWS() {
+  // Annuler toute reconnexion en attente
+  if (S.wsReconnectTimer) { clearTimeout(S.wsReconnectTimer); S.wsReconnectTimer = null; }
+  // Ne pas ouvrir si déjà une connexion ouverte ou en cours
+  if (S.ws && (S.ws.readyState === WebSocket.OPEN || S.ws.readyState === WebSocket.CONNECTING)) return;
+
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${proto}//${location.host}/ws`;
-  S.ws = new WebSocket(wsUrl);
+  S.ws = new WebSocket(`${proto}//${location.host}/ws`);
 
   S.ws.onopen = () => {
     S.wsReady = true;
+    S.wsRetryDelay = 3000; // Reset du délai
     document.getElementById('connDot').className = 'conn-dot online';
     S.ws.send(JSON.stringify({ type:'identify', role:S.role, name:S.name }));
   };
@@ -1107,14 +1112,16 @@ function initWS() {
   S.ws.onclose = () => {
     S.wsReady = false;
     document.getElementById('connDot').className = 'conn-dot offline';
-    setTimeout(initWS, 3000); // Reconnect
+    // Backoff exponentiel : 3s, 6s, 12s, max 30s
+    if (!S.wsRetryDelay) S.wsRetryDelay = 3000;
+    S.wsReconnectTimer = setTimeout(() => {
+      S.wsRetryDelay = Math.min((S.wsRetryDelay || 3000) * 2, 30000);
+      initWS();
+    }, S.wsRetryDelay);
   };
 
   S.ws.onerror = () => { S.ws.close(); };
-
-  S.ws.onmessage = (e) => {
-    try { handleWSMsg(JSON.parse(e.data)); } catch {}
-  };
+  S.ws.onmessage = (e) => { try { handleWSMsg(JSON.parse(e.data)); } catch {} };
 }
 
 function wsSend(data) {
@@ -1218,6 +1225,7 @@ async function loadCfg() {
     const catEl = document.getElementById('f-cat-choices');
     if (catEl) {
       catEl.dataset.field = 'categorie';
+      catEl.dataset.multi = 'true';
       catEl.innerHTML = '';
       (S.cfg.categories||[]).forEach(c => {
         const d = document.createElement('div');
@@ -1475,13 +1483,30 @@ function renderPareto(data) {
 
 // ── FORM ──────────────────────────────────────────────────────
 function startForm() {
-  S.form = { impact: [] }; S.photos = [];
+  S.form = { impact: [], categorie: [] }; S.photos = [];
+  // Disposer les canvas proprement — évite les doubles événements
+  if (S.fabCanvas) { try { S.fabCanvas.dispose(); } catch {} S.fabCanvas = null; }
+  if (S.annotCanvas) { try { S.annotCanvas.dispose(); } catch {} S.annotCanvas = null; }
+  S.drawHistory = []; S.annotHistory = []; S.annotBase = null;
+
   document.getElementById('photoList').innerHTML = '';
   ['f-poste','f-desc','f-prop','f-essaye','f-infos'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
   ['p5-1','p5-2','p5-3','p5-4','p5-5','p5-cr'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
   document.querySelectorAll('.choice').forEach(c => c.className = 'choice');
   document.getElementById('f-desc-count').textContent = '0/200';
-  setVisMode('photo');
+
+  // Reset onglet visuel sur Photo
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+  ['photo','croquis','annot'].forEach((m,i) => {
+    const el = document.getElementById('vis-'+m);
+    if (el) el.style.display = i===0 ? '' : 'none';
+  });
+  const nophoto = document.getElementById('annot-nophoto');
+  const annotZone = document.getElementById('annot-zone');
+  if (nophoto) nophoto.style.display = '';
+  if (annotZone) annotZone.style.display = 'none';
+  S.visMode = 'photo';
+
   setTimeout(() => initDrawCanvas(), 100);
   showScreen('sc-op-form1');
 }
@@ -1529,12 +1554,12 @@ function setChoice(btn) { pick(btn); }
 
 function goForm2() {
   if (!document.getElementById('f-poste').value) { showToast('Sélectionnez un poste', 'err'); return; }
-  if (!S.form.categorie) { showToast('Sélectionnez une catégorie', 'err'); return; }
+  const cat = S.form.categorie;
+  if (!cat || (Array.isArray(cat) && cat.length === 0)) { showToast('Sélectionnez une catégorie', 'err'); return; }
   if (!S.form.urgence) { showToast("Sélectionnez l'urgence", 'err'); return; }
   if (!document.getElementById('f-desc').value.trim()) { showToast('Décrivez le problème', 'err'); return; }
   S.form.poste = document.getElementById('f-poste').value;
   S.form.description = document.getElementById('f-desc').value.trim();
-  // Reset impact à chaque passage en étape 2
   S.form.impact = [];
   showScreen('sc-op-form2');
 }
@@ -1558,12 +1583,20 @@ async function submitRemontee() {
   btn.disabled = true; btn.textContent = '⏳ Envoi...';
   try {
     const fd = new FormData();
+
+    // Sérialiser les tableaux en strings
+    const toStr = v => Array.isArray(v) ? v.join(', ') : (v || '');
+
     const fields = {
-      operateur: S.name, poste: S.form.poste, categorie: S.form.categorie,
-      urgence: S.form.urgence || 'Normal', description: S.form.description,
-      frequence: S.form.frequence || '', 
-      impact: Array.isArray(S.form.impact) ? S.form.impact.join(', ') : (S.form.impact || ''),
-      perimetre: S.form.perimetre || '', recurrent: S.form.recurrent || 'false',
+      operateur: S.name,
+      poste: S.form.poste,
+      categorie: toStr(S.form.categorie),
+      urgence: S.form.urgence || 'Normal',
+      description: S.form.description,
+      frequence: S.form.frequence || '',
+      impact: toStr(S.form.impact),
+      perimetre: S.form.perimetre || '',
+      recurrent: S.form.recurrent || 'false',
       proposition_operateur: document.getElementById('f-prop').value,
       infos_utiles: document.getElementById('f-infos').value,
     };
@@ -1609,16 +1642,20 @@ async function submitRemontee() {
 async function handlePhotos(event) {
   const files = Array.from(event.target.files);
   for (const f of files) {
-    if (S.photos.length >= 3) break;
-    const comp = await compressImg(f, 800);
-    const url = await toDataURL(comp);
-    const idx = S.photos.length;
-    S.photos.push({file:comp, url});
-    const list = document.getElementById('photoList');
-    const div = document.createElement('div');
-    div.className = 'photo-thumb'; div.id = `ph-${idx}`;
-    div.innerHTML = `<img src="${url}"><div class="rm" onclick="removePhoto(${idx})">✕</div>`;
-    list.appendChild(div);
+    if (S.photos.length >= 3) { showToast('Maximum 3 photos', 'err'); break; }
+    try {
+      const comp = await compressImg(f, 800);
+      const url = await toDataURL(comp);
+      const idx = S.photos.length;
+      S.photos.push({file:comp, url});
+      const list = document.getElementById('photoList');
+      const div = document.createElement('div');
+      div.className = 'photo-thumb'; div.id = `ph-${idx}`;
+      div.innerHTML = `<img src="${url}"><div class="rm" onclick="removePhoto(${idx})">✕</div>`;
+      list.appendChild(div);
+    } catch(e) {
+      showToast('Fichier non valide : ' + f.name, 'err');
+    }
   }
 }
 
@@ -1633,8 +1670,10 @@ function removePhoto(idx) {
 }
 
 async function compressImg(file, maxKb=800) {
-  return new Promise(res => {
-    const img = new Image(); const url = URL.createObjectURL(file);
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Fichier image invalide')); };
     img.onload = () => {
       URL.revokeObjectURL(url);
       let w=img.width, h=img.height;
@@ -1644,7 +1683,8 @@ async function compressImg(file, maxKb=800) {
       let q=0.85;
       const t=()=>c.toBlob(b=>{if(b.size/1024>maxKb&&q>0.3){q-=.1;t();}else res(new File([b],file.name,{type:'image/jpeg'}));}, 'image/jpeg', q);
       t();
-    }; img.src=url;
+    };
+    img.src=url;
   });
 }
 
@@ -1803,7 +1843,7 @@ function renderPanel(r) {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
         <span style="font-size:0.75em;color:var(--txt2)">${esc(r.poste)}</span>
         <span style="font-size:0.75em;color:var(--muted)">·</span>
-        <span style="font-size:0.75em;color:var(--txt2)">${r.categorie}</span>
+        <span style="font-size:0.75em;color:var(--txt2)">${esc(r.categorie)}</span>
         <span style="font-size:0.75em;color:var(--muted)">·</span>
         <span style="font-size:0.75em;color:var(--txt2)">${esc(r.operateur)}</span>
         <span style="font-size:0.75em;color:var(--muted)">·</span>
@@ -1979,10 +2019,10 @@ function renderPanelActions(r, activeStep) {
   if (r.contre_mesure_retenue && !r.resultat_check) {
     html += `<div class="action-block">
       <div class="action-block-title n1-c">ÉTAPE 5 — CHECK · La contre-mesure a fonctionné ?</div>
-      <div class="choices col" style="margin-bottom:10px">
-        <div class="choice" data-cr="Résolu totalement" onclick="setChoice(this,'check_resultat','')">✅ Résolu totalement</div>
-        <div class="choice" data-cr="Résolu partiellement" onclick="setChoice(this,'check_resultat','')">⚠️ Résolu partiellement</div>
-        <div class="choice" data-cr="Non résolu" onclick="setChoice(this,'check_resultat','')">❌ Non résolu</div>
+      <div class="choices col" data-field="check_resultat" id="check-choices" style="margin-bottom:10px">
+        <div class="choice" data-value="Résolu totalement" onclick="pick(this)">✅ Résolu totalement</div>
+        <div class="choice" data-value="Résolu partiellement" onclick="pick(this)">⚠️ Résolu partiellement</div>
+        <div class="choice" data-value="Non résolu" onclick="pick(this)">❌ Non résolu</div>
       </div>
       <input class="input" id="act-check-comment" placeholder="Observations..." style="margin-bottom:10px">
       <button class="btn ${S.role==='3'?'btn-n3':'btn-n1'}" onclick="actionCheck(${id})">✔ Valider CHECK</button>
@@ -2042,12 +2082,16 @@ function toggleTools() {
 }
 
 function switchTool(btn, toolId, roleCls) {
+  // Remonter jusqu'au conteneur des tabs — pas de sélecteur d'attribut avec valeur dans closest()
   btn.closest('.tool-tabs').querySelectorAll('.tool-tab').forEach(t => t.className='tool-tab');
   btn.classList.add('active', roleCls);
-  const container = btn.closest('[id="zone-tools"]') || document.getElementById('zone-tools');
-  container.querySelectorAll('[id^="tool-"]').forEach(el => el.style.display='none');
-  const el = document.getElementById(toolId);
-  if (el) el.style.display='';
+  // Chercher le zone-tools parent direct du tool-tabs
+  const zoneTools = btn.closest('.tool-tabs').parentElement;
+  if (zoneTools) {
+    zoneTools.querySelectorAll('[id^="tool-"]').forEach(el => el.style.display='none');
+    const el = zoneTools.querySelector('#'+toolId);
+    if (el) el.style.display='';
+  }
 }
 
 function render5PForm(r) {
@@ -2216,15 +2260,16 @@ async function actionDO(id) {
 }
 
 async function actionCheck(id) {
-  const choices = document.querySelectorAll('[data-cr]');
-  let resultat = null;
-  choices.forEach(c => { if(c.classList.contains('sel')) resultat = c.dataset.cr; });
+  // Lire depuis S.form — pas de querySelector document-wide
+  const resultat = S.form.check_resultat;
   if (!resultat) { showToast('Sélectionnez le résultat', 'err'); return; }
-  const statut = resultat === 'Non résolu' ? 'En cours' : resultat === 'Résolu totalement' ? 'Check' : 'En cours';
+  const statut = resultat === 'Résolu totalement' ? 'Check' : 'En cours';
   await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     resultat_check: resultat, statut, date_check: new Date().toISOString(),
     user_label: S.name, commentaire: document.getElementById('act-check-comment')?.value || null
   })});
+  // Reset pour la prochaine utilisation
+  S.form.check_resultat = null;
   showToast('CHECK enregistré ✓', 'ok');
   openPanel(id);
 }
@@ -2327,10 +2372,14 @@ function statutBadge(s) {
 
 function fmtDate(d) {
   if (!d) return '—';
-  const dt = new Date(d); const diff = Date.now()-dt.getTime();
-  if (diff<60000) return "<1min";
-  if (diff<3600000) return Math.round(diff/60000)+"min";
-  if (diff<86400000) return Math.round(diff/3600000)+"h";
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '—'; // Date invalide
+  const diff = Date.now() - dt.getTime();
+  if (diff < 0) return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'}); // Futur
+  if (diff < 60000) return '<1min';
+  if (diff < 3600000) return Math.round(diff/60000)+'min';
+  if (diff < 86400000) return Math.round(diff/3600000)+'h';
+  if (diff < 2592000000) return Math.round(diff/86400000)+'j';
   return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
 }
 </script>
