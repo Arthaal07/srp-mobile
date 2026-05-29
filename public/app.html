@@ -1013,6 +1013,7 @@ input[type=color]{width:30px;height:30px;border-radius:6px;border:none;cursor:po
 const S = {
   role: null, name: null, wsId: null,
   ws: null, wsReady: false,
+  wsReconnectTimer: null, wsRetryDelay: 3000,
   cfg: {}, photos: [], fabCanvas: null, annotCanvas: null,
   drawTool: 'pencil', annotTool: 'pencil',
   drawHistory: [], annotHistory: [],
@@ -1020,7 +1021,7 @@ const S = {
   isDrawing: false, annotDrawing: false,
   startX: 0, startY: 0, activeShape: null,
   annotStartX: 0, annotStartY: 0, annotActiveShape: null,
-  form: {},
+  form: { impact: [], categorie: [] },
   currentPanelId: null,
   charts: {},
   unreadCrit: 0,
@@ -1317,6 +1318,7 @@ function showScreen(id) {
 async function loadOpData() {
   try {
     const r = await fetch(`/api/remontees?operateur=${encodeURIComponent(S.name)}`);
+    if (!r.ok) return;
     const all = await r.json();
     const open = all.filter(x => !['Résolu','Clôturé'].includes(x.statut));
     const done = all.filter(x => ['Résolu','Clôturé'].includes(x.statut));
@@ -1324,27 +1326,29 @@ async function loadOpData() {
     document.getElementById('op-stat-open').textContent = open.length;
     document.getElementById('op-stat-done').textContent = done.length;
     renderRList(all.slice(0,5), 'op-list');
-  } catch {}
+  } catch { document.getElementById('op-list').innerHTML = '<div class="empty"><p>Serveur inaccessible</p></div>'; }
 }
 
 async function loadOpMes() {
   try {
     const r = await fetch(`/api/remontees?operateur=${encodeURIComponent(S.name)}`);
+    if (!r.ok) return;
     renderRList(await r.json(), 'op-mes-list');
-  } catch {}
+  } catch { document.getElementById('op-mes-list').innerHTML = '<div class="empty"><p>Erreur de chargement</p></div>'; }
 }
 
 // ── N1 DATA ───────────────────────────────────────────────────
 async function loadN1Data() {
   try {
     const r = await fetch('/api/stats');
+    if (!r.ok) return;
     const s = await r.json();
     document.getElementById('n1-stat-new').textContent = s.en_attente_n1 || 0;
     document.getElementById('n1-stat-esc').textContent = s.en_attente_n2 || 0;
     document.getElementById('n1-stat-crit').textContent = s.critiques_ouverts || 0;
     const r2 = await fetch('/api/remontees?ouvert=true');
-    renderRList(await r2.json(), 'n1-list-open');
-  } catch {}
+    if (r2.ok) renderRList(await r2.json(), 'n1-list-open');
+  } catch { document.getElementById('n1-list-open').innerHTML = '<div class="empty"><p>Serveur inaccessible</p></div>'; }
 }
 
 async function loadN1List() {
@@ -1355,14 +1359,16 @@ async function loadN1List() {
   if (urg) url += `urgence=${encodeURIComponent(urg)}&`;
   try {
     const r = await fetch(url);
+    if (!r.ok) return;
     renderRList(await r.json(), 'n1-list-all');
-  } catch {}
+  } catch { document.getElementById('n1-list-all').innerHTML = '<div class="empty"><p>Erreur de chargement</p></div>'; }
 }
 
 // ── N3 DATA ───────────────────────────────────────────────────
 async function loadN3Data() {
   try {
     const r = await fetch('/api/stats');
+    if (!r.ok) return;
     const s = await r.json();
     document.getElementById('n3-total').textContent = s.total || 0;
     document.getElementById('n3-open').textContent = s.ouverts || 0;
@@ -1371,7 +1377,7 @@ async function loadN3Data() {
     renderTop5(s.top5 || []);
     renderEvol(s.evolution || []);
     renderPareto(s.parCategorie || []);
-  } catch {}
+  } catch { showToast('Serveur inaccessible', 'err'); }
 }
 
 async function loadN3List() {
@@ -1382,10 +1388,12 @@ async function loadN3List() {
     let url = '/api/remontees?';
     if (statut) url += `statut=${encodeURIComponent(statut)}&`;
     if (urg) url += `urgence=${encodeURIComponent(urg)}&`;
-    let data = await (await fetch(url)).json();
+    const r = await fetch(url);
+    if (!r.ok) return;
+    let data = await r.json();
     if (search) data = data.filter(r => r.description.toLowerCase().includes(search)||r.operateur.toLowerCase().includes(search)||r.poste.toLowerCase().includes(search));
     renderRList(data, 'n3-list-all');
-  } catch {}
+  } catch { document.getElementById('n3-list-all').innerHTML = '<div class="empty"><p>Erreur de chargement</p></div>'; }
 }
 
 async function loadN3Config() {
@@ -2272,60 +2280,87 @@ async function saveAnalyse(id) {
   }
 
   payload.user_label = S.name;
-  await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  showToast('Analyse sauvegardée ✓','ok');
+  try {
+    const r = await fetch(`/api/remontees/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+    });
+    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || 'Erreur serveur'); }
+    showToast('Analyse sauvegardée ✓','ok');
+  } catch(e) { showToast('Erreur : ' + e.message, 'err'); }
 }
 
 // ── ACTIONS PDCA ──────────────────────────────────────────────
 async function actionDO(id) {
   const cm = document.getElementById('act-cm')?.value?.trim();
   if (!cm) { showToast('Entrez la contre-mesure', 'err'); return; }
-  const payload = {
-    contre_mesure_retenue: cm,
-    responsable_do: document.getElementById('act-resp')?.value || S.name,
-    statut: 'En cours', date_test_debut: new Date().toISOString(),
-    niveau_actuel: S.role === '3' ? 3 : 1,
-    user_label: S.name,
-    commentaire: document.getElementById('act-comment-do')?.value || null,
-  };
-  await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  showToast('DO enregistré ✓', 'ok');
-  openPanel(id);
+  try {
+    const r = await fetch(`/api/remontees/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        contre_mesure_retenue: cm,
+        responsable_do: document.getElementById('act-resp')?.value || S.name,
+        statut: 'En cours',
+        date_test_debut: new Date().toISOString(),
+        niveau_actuel: S.role === '3' ? 3 : 1,
+        user_label: S.name,
+        commentaire: document.getElementById('act-comment-do')?.value || null,
+      })
+    });
+    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || 'Erreur serveur'); }
+    showToast('DO enregistré ✓', 'ok');
+    openPanel(id);
+  } catch(e) { showToast('Erreur : ' + e.message, 'err'); }
 }
 
 async function actionCheck(id) {
-  // Lire depuis S.form — pas de querySelector document-wide
   const resultat = S.form.check_resultat;
   if (!resultat) { showToast('Sélectionnez le résultat', 'err'); return; }
   const statut = resultat === 'Résolu totalement' ? 'Check' : 'En cours';
-  await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    resultat_check: resultat, statut, date_check: new Date().toISOString(),
-    user_label: S.name, commentaire: document.getElementById('act-check-comment')?.value || null
-  })});
-  // Reset pour la prochaine utilisation
-  S.form.check_resultat = null;
-  showToast('CHECK enregistré ✓', 'ok');
-  openPanel(id);
+  try {
+    const r = await fetch(`/api/remontees/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        resultat_check: resultat, statut,
+        date_check: new Date().toISOString(),
+        user_label: S.name,
+        commentaire: document.getElementById('act-check-comment')?.value || null
+      })
+    });
+    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || 'Erreur serveur'); }
+    S.form.check_resultat = null;
+    showToast('CHECK enregistré ✓', 'ok');
+    openPanel(id);
+  } catch(e) { showToast('Erreur : ' + e.message, 'err'); }
 }
 
 async function actionACT(id) {
   const lecon = document.getElementById('act-lecon')?.value?.trim();
   if (!lecon) { showToast('Entrez la leçon apprise', 'err'); return; }
-  await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    standard_cree: document.getElementById('act-std')?.value || null,
-    lecon_apprise: lecon, statut: 'Clôturé',
-    niveau_actuel: 3, user_label: S.name
-  })});
-  showToast('🎉 Remontée clôturée !', 'ok');
-  openPanel(id);
+  try {
+    const r = await fetch(`/api/remontees/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        standard_cree: document.getElementById('act-std')?.value || null,
+        lecon_apprise: lecon, statut: 'Clôturé',
+        niveau_actuel: 3, user_label: S.name
+      })
+    });
+    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || 'Erreur serveur'); }
+    showToast('🎉 Remontée clôturée !', 'ok');
+    openPanel(id);
+  } catch(e) { showToast('Erreur : ' + e.message, 'err'); }
 }
 
 async function escalade(id) {
-  await fetch(`/api/remontees/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    niveau_actuel:2, statut:'Escaladé', user_label:S.name, commentaire:'Escalade manuelle'
-  })});
-  showToast('Escaladé au Niveau 2', 'ok');
-  openPanel(id);
+  try {
+    const r = await fetch(`/api/remontees/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ niveau_actuel:2, statut:'Escaladé', user_label:S.name, commentaire:'Escalade manuelle' })
+    });
+    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || 'Erreur serveur'); }
+    showToast('Escaladé au Niveau 2', 'ok');
+    openPanel(id);
+  } catch(e) { showToast('Erreur : ' + e.message, 'err'); }
 }
 
 // ── BASE DE CONNAISSANCE ──────────────────────────────────────

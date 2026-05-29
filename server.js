@@ -303,42 +303,51 @@ app.get('/api/remontees/:id', (req, res) => {
 app.patch('/api/remontees/:id',
   upload.fields([{name:'photo_check',max:1}]),
   (req, res) => {
-    const id = req.params.id;
-    const r = dbGet('SELECT statut,niveau_actuel FROM remontees WHERE id=?', [id]);
-    if (!r) return res.status(404).json({ error: 'Non trouvé' });
+    try {
+      const id = req.params.id;
+      const r = dbGet('SELECT statut,niveau_actuel FROM remontees WHERE id=?', [id]);
+      if (!r) return res.status(404).json({ error: 'Non trouvé' });
 
-    const d = req.body, f = req.files || {};
-    const now = new Date().toISOString();
-    const updates = { updated_at: now };
+      const d = req.body, f = req.files || {};
+      const now = new Date().toISOString();
+      const updates = { updated_at: now };
 
-    const fields = ['statut','niveau_actuel','traitement_n1','traitement_n2',
-      'contre_mesure_retenue','responsable_do','date_test_debut','date_check',
-      'resultat_check','standard_cree','lecon_apprise',
-      'analyse_5p','analyse_ishikawa','analyse_isnot','analyse_qqoqccp','analyse_8d',
-      'proposition_operateur','infos_utiles'];
-    fields.forEach(k => { if (d[k] !== undefined && d[k] !== '') updates[k] = d[k]; });
+      const fields = ['statut','traitement_n1','traitement_n2',
+        'contre_mesure_retenue','responsable_do','date_test_debut','date_check',
+        'resultat_check','standard_cree','lecon_apprise',
+        'analyse_5p','analyse_ishikawa','analyse_isnot','analyse_qqoqccp','analyse_8d',
+        'proposition_operateur','infos_utiles'];
+      fields.forEach(k => { if (d[k] !== undefined && d[k] !== '') updates[k] = d[k]; });
 
-    if (f.photo_check?.[0]) updates.photo_check_b64 = toB64(f.photo_check[0]);
+      // niveau_actuel doit être un entier
+      if (d.niveau_actuel !== undefined) updates.niveau_actuel = parseInt(d.niveau_actuel) || r.niveau_actuel;
 
-    if (['Clôturé','Résolu'].includes(d.statut)) {
-      updates.date_cloture = now;
-      const c = dbGet('SELECT created_at FROM remontees WHERE id=?', [id]);
-      updates.delai_resolution_h = Math.round(((Date.now()-new Date(c.created_at).getTime())/3600000)*10)/10;
+      if (f.photo_check?.[0]) updates.photo_check_b64 = toB64(f.photo_check[0]);
+
+      if (['Clôturé','Résolu'].includes(d.statut)) {
+        updates.date_cloture = now;
+        const c = dbGet('SELECT created_at FROM remontees WHERE id=?', [id]);
+        if (c?.created_at) {
+          updates.delai_resolution_h = Math.round(((Date.now()-new Date(c.created_at).getTime())/3600000)*10)/10;
+        }
+      }
+
+      const cols = Object.keys(updates).map(k=>`${k}=?`).join(',');
+      dbRun(`UPDATE remontees SET ${cols} WHERE id=?`, [...Object.values(updates), id]);
+
+      if (d.statut && d.statut !== r.statut) {
+        dbRun('INSERT INTO historique_statuts (remontee_id,ancien_statut,nouveau_statut,niveau,user_label,commentaire) VALUES (?,?,?,?,?,?)',
+          [id, r.statut, d.statut, parseInt(d.niveau_actuel)||r.niveau_actuel, d.user_label||null, d.commentaire||null]);
+      }
+
+      const updated = dbGet('SELECT id,statut,niveau_actuel,contre_mesure_retenue,resultat_check,lecon_apprise,date_cloture FROM remontees WHERE id=?', [id]);
+      broadcast({ type: 'remontee_updated', remontee: updated });
+
+      res.json({ ok: true });
+    } catch(e) {
+      console.error('PATCH /remontees error:', e.message);
+      res.status(500).json({ error: e.message || 'Erreur serveur' });
     }
-
-    const cols = Object.keys(updates).map(k=>`${k}=?`).join(',');
-    dbRun(`UPDATE remontees SET ${cols} WHERE id=?`, [...Object.values(updates), id]);
-
-    if (d.statut && d.statut !== r.statut) {
-      dbRun('INSERT INTO historique_statuts (remontee_id,ancien_statut,nouveau_statut,niveau,user_label,commentaire) VALUES (?,?,?,?,?,?)',
-        [id, r.statut, d.statut, d.niveau_actuel||r.niveau_actuel, d.user_label||null, d.commentaire||null]);
-    }
-
-    // Notifier tous les connectés sur cette fiche
-    const updated = dbGet(`SELECT id,statut,niveau_actuel,contre_mesure_retenue,resultat_check,lecon_apprise,date_cloture FROM remontees WHERE id=?`, [id]);
-    broadcast({ type: 'remontee_updated', remontee: updated });
-
-    res.json({ ok: true });
   }
 );
 
